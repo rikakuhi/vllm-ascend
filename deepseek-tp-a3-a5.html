@@ -1,0 +1,1004 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DeepSeek V4 · O 投影与并行切分</title><style>
+:root{--bg:#f5f5f0;--ink:#18312f;--muted:#657670;--line:#dce2da;--teal:#16766a;--soft:#dceee8;--blue:#e5edf7;--amber:#f5ecd5;--mono:Consolas,monospace}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,'Microsoft YaHei',sans-serif}a{color:#166c62}h1,h2,h3,p{margin:0 0 12px}h1{font-size:clamp(30px,4vw,48px);line-height:1.2}h2{font-size:25px}h3{font-size:17px}.shell{max-width:1440px;margin:auto;padding:36px 36px 80px}.eyebrow{font:11px var(--mono);letter-spacing:2px;color:var(--teal);margin-bottom:12px}.intro{max-width:900px;color:var(--muted);font-size:16px}.notice{background:#eaf0e9;border-left:3px solid var(--teal);padding:14px 18px;margin:24px 0}.tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:25px 0}button,select{font:inherit;cursor:pointer;color:inherit}button{background:white;border:1px solid var(--line);border-radius:6px;padding:9px 14px}.tabs button{background:none;border:0;border-radius:0;border-bottom:3px solid transparent;color:var(--muted)}.tabs button.active{color:var(--teal);border-bottom-color:var(--teal)}button:focus-visible,select:focus-visible{outline:3px solid #76b3a8;outline-offset:2px}.toolbar{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:18px 0}label{display:flex;gap:7px;align-items:center;font-size:13px}select{background:white;border:1px solid var(--line);padding:7px;border-radius:5px}.panel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:22px;margin:16px 0}.summary{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line);margin:20px 0}.summary div{padding:14px;border-right:1px solid var(--line)}.summary strong{display:block;font:22px var(--mono)}.summary span,.muted{color:var(--muted);font-size:12px}.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.step{background:#eff4ee;padding:15px;border-radius:5px;min-width:0}.step strong{display:block;color:var(--teal)}code,pre{font-family:var(--mono)}code{overflow-wrap:anywhere;background:#eff3ed;padding:1px 4px;border-radius:3px;font-size:.9em}pre{background:#eef2ed;padding:16px;border-radius:5px;overflow:auto;font-size:12px;line-height:1.7}pre code{background:none;padding:0}.section{margin-top:38px}.formula{font:14px/1.9 var(--mono);overflow-wrap:anywhere}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.shards{display:grid;gap:6px}.shard{display:grid;grid-template-columns:100px 1fr;gap:8px;align-items:center}.cells{display:grid;gap:4px}.cell{padding:9px 2px;text-align:center;background:var(--soft);border-radius:3px;font:12px var(--mono)}.cell.off{background:#f1f3ef;color:#a2aca5}.legend{font-size:12px;color:var(--muted);margin-top:12px}.callout{padding:14px;background:var(--amber);border-radius:5px;margin-top:14px}.pill{font:11px var(--mono);background:var(--soft);padding:4px 8px;border-radius:4px}.report{max-width:1200px}.report h1{font-size:28px}.report h2{margin-top:42px;padding-top:20px;border-top:1px solid var(--line)}.report h3{margin-top:25px}.report p,.report ul,.report ol{margin:12px 0}.report table{border-collapse:collapse;width:100%;font-size:13px;display:block;overflow:auto;max-width:100%}.report th,.report td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.report th{background:#edf3ed}.report li{margin:5px 0}.report a{overflow-wrap:anywhere}.report pre{white-space:pre;max-width:100%}.footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}[hidden]{display:none!important}@media(max-width:850px){.shell{padding:24px 16px}.summary{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.shard{grid-template-columns:70px 1fr}}@media print{.tabs,.toolbar{display:none}.view{display:block!important}.panel{break-inside:avoid}}
+
+.visual-intro{max-width:920px;color:#526a64;font-size:15px}.visual-card{margin:28px 0;padding:28px;background:#fff;border:1px solid #dce2da;border-radius:9px}.visual-card h2{margin:7px 0}.figure-kicker{font:11px Consolas,monospace;letter-spacing:1.4px;color:#16766a}.figure-description{color:#5e706a;max-width:1000px}.visual-scroll{overflow-x:auto;padding:4px 0}.diagram-board{min-width:720px;background:#f5f7f2;padding:20px;border-radius:6px}.lane-grid{display:grid;grid-template-columns:145px repeat(4,minmax(125px,1fr));gap:8px;align-items:stretch}.lane-label{display:flex;align-items:center;font-weight:700;font-size:13px}.node{padding:12px;border-radius:5px;background:#e1ede7;border:1px solid #cae0d6;font-size:12px;line-height:1.5}.node.blue{background:#e8eff7;border-color:#d5e1f0}.node.amber{background:#faf0d9;border-color:#ecdeb9}.node.purple{background:#f0eaf4;border-color:#e1d7e8}.node.dark{background:#244d47;color:#fff;border-color:#244d47}.node strong{display:block;font-size:13px;margin-bottom:3px}.node code{background:transparent;padding:0}.transition{grid-column:2/-1;text-align:center;color:#16766a;font:12px Consolas,monospace;line-height:1.2;padding:2px}.matrix-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.matrix{background:white;border:1px solid #dce2da;border-radius:6px;padding:16px}.matrix h3{margin:0 0 10px}.matrix-row{display:grid;grid-template-columns:80px 1fr 1fr;gap:4px;margin:4px 0}.matrix-cell{padding:10px 8px;background:#dceee8;border-radius:3px;font:12px Consolas,monospace;text-align:center}.matrix-cell.blue{background:#e5edf7}.matrix-cell.out{background:#f5ecd5}.matrix-label{display:flex;align-items:center;font-size:12px;color:#667570}.figure-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.figure-notes div{padding:12px 14px;background:#f4f6f1;border-radius:4px;font-size:13px}.figure-notes strong{display:block;margin-bottom:4px}.source-line{font-size:12px;color:#657670;margin:15px 0 0}.path-flow{display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));gap:7px;align-items:stretch}.path-flow .node:not(:last-child):after{content:' →';color:#16766a;font-weight:bold}.mini-note{font-size:12px;color:#657670;margin-top:10px}.step-list{display:grid;gap:7px}.step-line{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:start;font-size:13px}.step-number{display:inline-grid;place-items:center;background:#16766a;color:white;width:24px;height:24px;border-radius:50%;font-size:11px}.compare-board{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.compare-board .node{min-height:120px}.compare-board .node strong{font-size:15px}@media(max-width:850px){.visual-card{padding:18px}.figure-notes{grid-template-columns:1fr}.matrix-grid{grid-template-columns:1fr}.compare-board{grid-template-columns:1fr}.path-flow{grid-template-columns:1fr 1fr}.path-flow .node:not(:last-child):after{content:''}}@media print{.visual-card{break-inside:avoid}}
+</style></head><body><div class="shell"><header><div class="eyebrow">DEEPSEEK V4 / PARALLELISM EXPLORER</div><h1>DeepSeek 矩阵切分与并行特性</h1><p class="intro">从两级矩阵和 O 组出发，比较标准 TP、沿 DP 轴的细粒度 OTP、以及 PCP 权重分片。切换模型和并行配置，追踪每个 rank 持有的组与通信路径。</p></header><div class="notice"><strong>源码分析与示意图。</strong> 基于 2026-10-26 的报告与固定代码基线；图中 rank、分组为逻辑示意，并非运行时抓取。本次报告未执行 A3 / A5 实机测试。配置通过局部结构检查也不代表完整部署已验证。</div><nav class="tabs" aria-label="页面导航"><button class="active" data-view="figures">00 图解与实例</button><button data-view="explore">01 O 矩阵切分</button><button data-view="communication">02 通信与条件</button><button data-view="related">03 词表 / MLP / 对照</button><button data-view="report">04 完整分析与源码</button></nav>
+<div id="figures" class="view"><div class="eyebrow">ILLUSTRATED GUIDE / 2 RANK EXAMPLES</div><h2>先看图：权重在哪里，数据怎么走</h2><p class="visual-intro">下面统一用两张逻辑 rank 画示例，色块对应各 rank 的权重或数据。矩阵采用行向量的逻辑方向，实际 tensor 的存储方向、量化打包和 rank 编号由实现决定。每张图后面都列出了对应源码。</p>
+<section class="visual-card"><div class="figure-kicker">FIGURE 01 · O PROJECTION / STRUCTURE</div><h2>一层 O 投影：两级矩阵怎样配对切分</h2><p class="figure-description">以 V4 Flash 的 G=8 为例：先将 attention 输出分成 8 个 O 组；每组经过独立的 wo_a，再由 wo_b 的对应输入片贡献到相同的 H 维输出。这里以两份为例，展示权重归属和部分和。</p><div class="visual-scroll"><div class="diagram-board"><div class="matrix-grid"><div class="matrix"><h3>输入 → 每组 wo_a</h3><div class="matrix-row"><span class="matrix-label">attention</span><span class="matrix-cell">G0–G3</span><span class="matrix-cell blue">G4–G7</span></div><div class="matrix-row"><span class="matrix-label">wo_a</span><span class="matrix-cell">4 × [4096, 1024]</span><span class="matrix-cell blue">4 × [4096, 1024]</span></div><div class="matrix-row"><span class="matrix-label">得到 Z</span><span class="matrix-cell">4 × 1024</span><span class="matrix-cell blue">4 × 1024</span></div></div><div class="matrix"><h3>拼接 Z → wo_b → 输出</h3><div class="matrix-row"><span class="matrix-label">wo_b</span><span class="matrix-cell">[4096, 4096]</span><span class="matrix-cell blue">[4096, 4096]</span></div><div class="matrix-row"><span class="matrix-label">局部输出</span><span class="matrix-cell">部分和 Y0 [B, H]</span><span class="matrix-cell blue">部分和 Y1 [B, H]</span></div><div class="matrix-row"><span class="matrix-label">汇总</span><span class="matrix-cell out" style="grid-column:span 2">Y = Y0 + Y1 → [B, 4096]</span></div></div></div><div class="mini-note">wo_b 两块是同一逻辑矩阵按输入组切出的片，每块映射到完整 H 维；不是把 H 输出维各切一半。</div></div></div><div class="figure-notes"><div><strong>标准 TP</strong>对应 attention heads 与 O 组随 TP 切，按层配置归约部分输出。</div><div><strong>OTP</strong>标准 TP1，沿 DP 组为 O 分配权重；不同 DP 请求需要先交换组数据。</div><div><strong>PCP O</strong>先按 TP 切，再在每个 TP 的本地 O 组内按 PCP 分片。</div></div><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v4/model.py#L500">V4 注意力层与 wo_a / wo_b 构造</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2125">分组 BMM 与 O 投影</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 02 · OTP / ALL-TO-ALL</div><h2>OTP：两个 DP 请求怎样经过 O 权重 owner</h2><p class="figure-description">假设 TP1、DP2、OTP K2；rank 0 和 1 分别拥有不同请求 A 和 B，各自的 attention 输出都包含全部 O 组。</p><div class="visual-scroll"><div class="diagram-board"><div class="lane-grid"><div class="lane-label">① 本地请求</div><div class="node"><strong>DP0 · 请求 A</strong>A 的 G0–G3</div><div class="node blue"><strong>DP0 · 请求 A</strong>A 的 G4–G7</div><div class="node"><strong>DP1 · 请求 B</strong>B 的 G0–G3</div><div class="node blue"><strong>DP1 · 请求 B</strong>B 的 G4–G7</div><div></div><div class="transition">↓ all_to_all：按 O 组 owner 交换，输入先 padding 到静态容量 ↓</div><div class="lane-label">② 本地投影</div><div class="node"><strong>owner DP0</strong>A 的 G0–G3<br>wo_a → wo_b</div><div class="node"><strong>owner DP0</strong>B 的 G0–G3<br>wo_a → wo_b</div><div class="node blue"><strong>owner DP1</strong>A 的 G4–G7<br>wo_a → wo_b</div><div class="node blue"><strong>owner DP1</strong>B 的 G4–G7<br>wo_a → wo_b</div><div></div><div class="transition">↓ reduce_scatter：按请求求和并交还原 DP rank ↓</div><div class="lane-label">③ 请求结果</div><div class="node dark" style="grid-column:span 2"><strong>DP0 · 请求 A</strong>A 的两份部分和相加 → 完整 H 向量</div><div class="node dark" style="grid-column:span 2"><strong>DP1 · 请求 B</strong>B 的两份部分和相加 → 完整 H 向量</div></div></div></div><div class="figure-notes"><div><strong>通信精度</strong>all-to-all 的 buffer 保持输入 dtype；相应 FP8 量化计算发生在交换之后。</div><div><strong>静态图容量</strong>预留通信 buffer；最大步超过容量或进入不支持的 eager 步需处理。</div><div><strong>生效范围</strong>还需满足 DP 整除、TP1、PCP1、PD Decode、graph、recompute / offload 等条件。</div></div><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">OTP buffer、all-to-all、BMM、reduce-scatter</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1364">配置前置条件</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 03 · EMBEDDING / VOCABULARY</div><h2>Embedding：按词表行切，最后还原完整向量</h2><p class="figure-description">以细粒度 K2 为例。词表行按 ID 分成两片；每个设备只查自己片内的 token，其余位置输出零。图中 A 和 B 是两个 DP rank 的不同 token。</p><div class="visual-scroll"><div class="diagram-board"><div class="lane-grid"><div class="lane-label">① 输入</div><div class="node" style="grid-column:span 2"><strong>DP0：token A</strong>需要完整 H 维 embedding</div><div class="node blue" style="grid-column:span 2"><strong>DP1：token B</strong>需要完整 H 维 embedding</div><div></div><div class="transition">↓ padding + all_gather token IDs ↓</div><div class="lane-label">② 按片查表</div><div class="node" style="grid-column:span 2"><strong>DP0：E 的前半词表行</strong>查 A、B；不属于本片的 ID → 0</div><div class="node blue" style="grid-column:span 2"><strong>DP1：E 的后半词表行</strong>查 A、B；不属于本片的 ID → 0</div><div></div><div class="transition">↓ reduce_scatter：相加并按 token owner 返回 ↓</div><div class="lane-label">③ 输出</div><div class="node dark" style="grid-column:span 2"><strong>DP0</strong>A 的完整 [H] 向量</div><div class="node dark" style="grid-column:span 2"><strong>DP1</strong>B 的完整 [H] 向量</div></div></div></div><p class="mini-note">PCP 词表分片使用 PCP 组交换 token，先 PCP reduce-scatter，再按需要 TP all-reduce；逻辑权重分成 T×P 份。Embedding 细粒度 K 替代本模块标准 TP 计划。</p><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L93">权重计划与互斥</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L307">token 交换、mask 与归约</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 04 · LM HEAD / LOGITS</div><h2>LM head：各卡计算局部词表，交还完整 logits</h2><p class="figure-description">以细粒度 K2 为例，每张卡拥有不同的词表权重，但要为两个 DP rank 的请求计算自己的词表区间。</p><div class="visual-scroll"><div class="diagram-board"><div class="lane-grid"><div class="lane-label">① 原始 hidden</div><div class="node" style="grid-column:span 2"><strong>DP0</strong>请求 A 的 hidden [B0,H]</div><div class="node blue" style="grid-column:span 2"><strong>DP1</strong>请求 B 的 hidden [B1,H]</div><div></div><div class="transition">↓ 对齐行数 + all_gather hidden states ↓</div><div class="lane-label">② 计算 logits</div><div class="node" style="grid-column:span 2"><strong>DP0：词表前半权重</strong>A 前半 logits + B 前半 logits</div><div class="node blue" style="grid-column:span 2"><strong>DP1：词表后半权重</strong>A 后半 logits + B 后半 logits</div><div></div><div class="transition">↓ all_to_all：按请求 owner 重排词表片 ↓</div><div class="lane-label">③ 采样输入</div><div class="node dark" style="grid-column:span 2"><strong>DP0</strong>A 的完整词表 logits [B0,V]</div><div class="node dark" style="grid-column:span 2"><strong>DP1</strong>B 的完整词表 logits [B1,V]</div></div></div></div><p class="mini-note">PCP head 路径先恢复 token 顺序，再按 PCP、TP 依次聚合词表 logits。细粒度 head 对采样、空闲 rank、投机与 prompt logprobs 有额外路径约束。</p><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L525">head 的 gather、all-to-all 和 PCP 汇集</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/spec_decode/lmhead_tp_utils.py#L33">MRv2 投机限制</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 05 · MLP / INTERMEDIATE DIMENSION</div><h2>MLP：沿中间维切分，down 的部分和再归约</h2><p class="figure-description">下图只描述命中细粒度 hook 的 Dense MLP，假设中间宽度 I 可均分为两片。实际权重形状与量化格式取决于模型。</p><div class="visual-scroll"><div class="diagram-board"><div class="lane-grid"><div class="lane-label">① 两个请求</div><div class="node" style="grid-column:span 2"><strong>DP0</strong>hidden A</div><div class="node blue" style="grid-column:span 2"><strong>DP1</strong>hidden B</div><div></div><div class="transition">↓ all_gather hidden states ↓</div><div class="lane-label">② 中间维计算</div><div class="node" style="grid-column:span 2"><strong>rank 0 · 中间维前半</strong>gate/up 片 → activation → down 片<br>生成 A、B 的部分和</div><div class="node blue" style="grid-column:span 2"><strong>rank 1 · 中间维后半</strong>gate/up 片 → activation → down 片<br>生成 A、B 的部分和</div><div></div><div class="transition">↓ reduce_scatter：相加并还给输入的 rank ↓</div><div class="lane-label">③ 输出</div><div class="node dark" style="grid-column:span 2"><strong>DP0</strong>A 的完整 hidden 输出</div><div class="node dark" style="grid-column:span 2"><strong>DP1</strong>B 的完整 hidden 输出</div></div></div></div><div class="callout">三款目标模型主干使用 MoE。hook 通过前缀和配置推断是否为 MoE 层；不能把这张图直接套到全部 Routed Experts 或 Shared Experts。需要核对运行时实际命中的模块。</div><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L263">MLP 的 all-gather / reduce-scatter</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L410">op 选择</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L479">MoE 层判断</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 06 · PCP / THREE EXECUTION PATHS</div><h2>PCP O：权重常驻分片，运行时有不同路径</h2><p class="figure-description">示例 TP1、PCP2，rank 0 / 1 分别常驻 G0–G3 与 G4–G7。是否生效还取决于组整除、实际权重方法及运行配置。</p><div class="compare-board"><div class="node"><strong>① 含 Prefill 的步骤</strong>all-gather PCP 的权重 shard → 临时得到 TP 本地完整 O → 计算本地 token → 恢复常驻 shard。</div><div class="node blue"><strong>② 分片式 Decode</strong>all-gather token → 各 rank 使用自己的 O 组计算部分和 → reduce-scatter 回 token owner。</div><div class="node amber"><strong>③ 复制式 Decode 通用路径</strong>各 rank 对相同 token 计算自己的 O 组 → PCP all-reduce 部分和。</div></div><div class="figure-notes"><div><strong>两类开关</strong>O 和词表的 PCP 权重分片开关是独立的；关闭 O 权重分片不等于关闭 PCP。</div><div><strong>回退</strong>初始化时 O 组不整除或 weight switch 不支持，可能告警并回退普通 O 权重。</div><div><strong>临时显存</strong>完整权重 scratch 和通信 buffer 也需要计算，不能只按常驻权重的分片比例估算。</div></div><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2584">资格检查、回退与分片加载</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2718">weight switch 与三条执行路径</a></p></section>
+<section class="visual-card"><div class="figure-kicker">FIGURE 07 · UPSTREAM COMPARISON</div><h2>同一个目标，上游与 Ascend 分别提供什么</h2><div class="compare-board"><div class="node"><strong>上游：标准 TP</strong>上游的 O 和词表层已有标准 TP 分片与归约；Embedding 还提供可指定通信组的底层接口。</div><div class="node blue"><strong>Ascend：跨 DP 细粒度</strong>增加独立组、配置及请求交换：OTP、Embedding、LM head、MLP 分别适配。</div><div class="node amber"><strong>Ascend：PCP 权重计划</strong>实现 DSA O 的分片 / weight switch 与 TP×PCP 词表计划；有各自的执行条件。</div></div><p class="mini-note">核查限定为上游 ffcabb8c7 和 Ascend 365692e28。在该上游版本搜索四个细粒度配置键未找到结果；这说明所核查版本没有这套现成入口，不说明硬件无法实现。</p><p class="source-line">源码：<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/vocab_parallel_embedding.py#L252">上游词表并行层</a> · <a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/models/deepseek_v4/attention.py#L212">上游 O</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/distributed/parallel_state.py#L173">Ascend 模块并行组</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1334">Ascend 配置字段</a></p></section></div>
+<div id="explore" class="view" hidden><div class="toolbar"><label>模型 <select id="model"><option value="flash">V4 Flash</option><option value="pro">V4 Pro</option><option value="v41">V4.1 Flash</option></select></label><label>切分方式 <select id="mode"><option value="tp">标准 TP</option><option value="otp">细粒度 OTP</option><option value="pcp">TP + PCP O 分片</option></select></label><label>标准 TP T <select id="tp"><option>1</option><option>2</option><option>4</option><option>8</option><option>16</option></select></label><label>OTP K <select id="otp"><option>2</option><option>4</option><option>8</option><option>16</option></select></label><label>PCP P <select id="pcp"><option>2</option><option>4</option><option>8</option><option>16</option></select></label><label>全局 DP <select id="dp"><option>8</option><option>4</option><option>16</option><option>2</option><option>1</option></select></label></div><div id="overview"></div><section class="section"><h2>两级投影：每个 O 组独立贡献一部分</h2><p class="muted">源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v4/model.py#L500">模型层构造</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">O 分组和 OTP 执行</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2584">PCP 权重切换</a></p><div class="flow"><div class="step"><strong>① Attention 输出</strong><span id="attention"></span></div><div class="step"><strong>② 重排成 G 组</strong><span id="group-shape"></span></div><div class="step"><strong>③ 每组 wo_a</strong><span id="wa-shape"></span></div><div class="step"><strong>④ 拼接低秩结果</strong><span id="z-shape"></span></div><div class="step"><strong>⑤ wo_b 还原</strong><span id="wb-shape"></span></div></div><div class="panel"><div class="formula">Z<sub>g</sub> = A<sub>g</sub> W<sub>a,g</sub> &nbsp; · &nbsp; Y = Σ<sub>g</sub> Z<sub>g</sub> W<sub>b,g</sub></div><p class="muted">这里按行向量表达逻辑矩阵；实际 PyTorch 权重存储方向、量化打包和内核布局可能不同。切分时整组分配：同一组的 wo_a 与 wo_b 配套放在同一个 owner。</p></div></section><section class="section"><h2>组归属与每卡权重</h2><p class="muted">颜色表示该 rank 所持有的 O 组；空白格是其他 rank 的组。下图只演示一个 DP 副本 / 一个 OTP 子组 / 一个 TP×PCP 组合，具体物理卡映射由部署拓扑决定。</p><div id="diagram" class="panel"></div><div id="details"></div></section></div>
+<div id="communication" class="view" hidden><h2>通信走哪条路？</h2><p>源码：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">OTP 执行与 buffer</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2718">PCP 权重与通信</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1364">配置校验</a></p><p class="muted">以下按报告固定代码版本描述，启用条件与回退以实际部署版本为准。</p><div class="grid"><div class="panel"><span class="pill">标准 TP</span><h3>同一请求，拆分 O 组</h3><p>每个 TP rank 处理自己的 attention heads / O 组，做本地 wo_a 与 wo_b；按实际层的归约设置汇总部分输出。</p><pre>本地 attention 组 → 本地 wo_a → 本地 wo_b → TP 输出归约</pre><p>普通路径可用于一体、Prefill 和 Decode。</p></div><div class="panel"><span class="pill">细粒度 OTP / DP 轴</span><h3>不同 DP 请求，交换 O 组输入</h3><pre>本 rank 的请求 × 全部 O 组
+ → 固定容量 padding
+ → all_to_all：按组送往权重 owner
+ → 本地 wo_a + wo_b，得到部分和
+ → reduce_scatter：求和并送回请求 owner</pre><p>通信 buffer 使用输入 dtype；量化发生在 all-to-all 之后。空闲 rank 也要参加 collective。</p></div><div class="panel"><span class="pill">PCP / PREFILL</span><h3>临时聚合权重</h3><pre>各 PCP rank 常驻 O 权重 shard
+ → all_gather TP 本地完整 wo_a / wo_b
+ → 各 rank 计算本地 token
+ → 恢复常驻 shard</pre><p>完整权重 scratch pool 可能在 warmup 后继续占用显存。</p></div><div class="panel"><span class="pill">PCP / DECODE</span><h3>聚合 token 或归约结果</h3><pre>分片式：all_gather token → 本地 O 组
+       → reduce_scatter 返回 token owner
+复制式：本地 O 组 → PCP all_reduce</pre><p>PCP&gt;1、DCP1 选择相应分片式 Decode；PD 分离的文档范围仍要求 PCP 在 P 端、D 端 PCP1。</p></div></div><div class="panel"><h3>生效条件和回退</h3><p><strong>OTP：</strong>K&gt;1、DP 可被 K 整除且 G 可被 K 整除；TP1、PCP1；合法 PD Decode、graph、recompute scheduler、PreemptOffload。PP1 是文档支持边界。capture 容量不足可能自动关闭 O / MLP 细粒度设置；超过静态容量或 eager 步可能失败。</p><p><strong>PCP O：</strong>MRv2；G/T 可被 P 整除；wo_a 和 wo_b 的实际量化方法支持 weight switch。初始化不满足条件时可能告警并回退普通 O 权重。PCP 与旧 DSA-CP 互斥，整体 FULL graph 不支持。</p><p><strong>跨层 buffer：</strong>有效 OTP 的模型级池按 shape、dtype、device 复用发送、接收和 reduce-scatter buffer；权重仍按层保存。PCP 也有适用于兼容布局的交换 / 权重池，需计入显存。</p><p class="muted">细节、投机解码、connector 和量化限制见完整分析第 4、6、7、8、10 节。</p></div></div>
+<div id="related" class="view" hidden><h2>词表、MLP 与上游实现</h2><p class="muted">选择模块和权重布局，查看逻辑分片与执行顺序。模型维度是原报告列出的配置样例，实际 checkpoint 和 padding 需以运行时配置为准。</p><div class="toolbar"><label>模块 <select id="feature"><option value="embed">Token Embedding</option><option value="head">LM head</option><option value="mlp">Dense MLP</option></select></label><label>权重计划 <select id="layout"><option value="standard">标准 TP</option><option value="fine">细粒度 TP / DP 组</option><option value="pcpv">PCP × TP 词表分片</option></select></label><label>模型 <select id="vmodel"><option value="flash">V4 Flash</option><option value="pro">V4 Pro</option><option value="v41">V4.1 Flash</option></select></label><label>标准 TP T <select id="vt"><option>1</option><option>2</option><option>4</option><option>8</option></select></label><label>细粒度 K <select id="vk"><option>1</option><option>2</option><option>4</option><option>8</option></select></label><label>PCP P <select id="vp"><option>2</option><option>4</option><option>8</option></select></label></div><div id="feature-display"></div>
+<section class="section"><h2>PCP 的完整拓扑与权重选择</h2><div class="grid"><div class="panel"><h3>PCP 额外增加一条并行轴</h3><p>PP1、TP1、DP2、PCP8 示例有 16 个逻辑 rank；细粒度 TP 则在已有 DP 轴内按 K 建组。两者的 rank 组成和通信对象不同。</p><pre>TP × DP × PCP × PP = 1 × 2 × 8 × 1
+PCP 词表 shard index = TP rank × P + PCP rank</pre><p>词表联合开关默认 true，且 PCP&gt;1 时同时作用于 Embedding 和 LM head；<code>disable_tp=True</code> 的复制层优先保持复制。</p><p><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L93">代码：词表计划和优先级</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/distributed/parallel_state.py#L173">代码：并行组</a></p></div><div class="panel"><h3>两项 PCP 权重开关相互独立</h3><p><code>enable_pcp_o_proj_weight_sharding</code> 控制 O；<code>enable_pcp_embedding_lmhead_weight_sharding</code> 共同控制 Embedding 与 head。二者默认 true，但 O 分片还可能因组整除或 weight switch 不支持而回退。</p><p>MRv2、graph、connector、投机、PD 位置等仍受各自代码及配方约束；代码内部存在某路径不等于整个部署组合已验证。</p><p><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L583">代码：开关默认值</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2584">代码：O 检查和回退</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/pcp_manager.py#L318">代码：PCP 限制</a></p></div></div></section>
+<section class="section"><h2>vLLM 上游与 vLLM Ascend：逐项对照</h2><div class="notice">对照范围固定为上游 <code>ffcabb8c7</code> 与 Ascend <code>365692e28</code>。在上游该提交的 <code>vllm/</code> 中搜索了四个细粒度配置键，未找到匹配；这不代表 GPU 无法实现，也不代表其他提交没有类似功能。</div><div class="panel report"><table><thead><tr><th>能力</th><th>上游 vLLM：固定提交</th><th>vLLM Ascend：固定提交</th><th>代码依据</th></tr></thead><tbody><tr><td>标准 TP 与 O</td><td>存在模型 O 层及标准 TP；普通 TP 可切 O。</td><td>支持标准路径，另提供 OTP 对应权重组与执行逻辑。</td><td><a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/models/deepseek_v4/attention.py#L212">上游 O</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">Ascend O</a></td></tr><tr><td>OTP / 跨 DP 的 O</td><td>未发现本次检查的 <code>oproj_tensor_parallel_size</code> 对应组、配置与执行链。</td><td>实现 OTP 分组、all-to-all、两级 O 与 reduce-scatter，受 PD Decode 等条件限制。</td><td><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/distributed/parallel_state.py#L173">组</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">执行</a></td></tr><tr><td>Embedding</td><td>词表并行层已有标准 TP 与 <code>parallel_group</code> 底层接口。</td><td>增加细粒度 DP 组、token all-gather / reduce-scatter 及 PCP×TP 计划。</td><td><a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/vocab_parallel_embedding.py#L252">上游层</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L307">Ascend 执行</a></td></tr><tr><td>LM head</td><td>有 ParallelLMHead 和标准 logits 汇集。</td><td>增加细粒度隐藏状态 all-gather、logits all-to-all 与 PCP 词表重建。</td><td><a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/logits_processor.py#L128">上游 logits</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L525">Ascend logits</a></td></tr><tr><td>MLP 细粒度</td><td>有标准并行线性层；未发现本次检查的独立跨 DP MLP 配置键。</td><td>按 prefix 和 MoE 判断选择 MLP column / row 自定义 op；实际命中层需检查。</td><td><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L263">Ascend MLP</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L410">选择逻辑</a></td></tr><tr><td>PCP 权重分片</td><td>上游有上下文并行基础设施；不据此认定有 Ascend 的这两个权重开关和 DSA O 执行路径。</td><td>实现 DSA PCP O 的 weight switch，以及 TP×PCP 词表分片和通信。</td><td><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2584">Ascend PCP O</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L93">Ascend 词表</a></td></tr></tbody></table><p>上游的 <code>additional_config</code> 是通用容器；字段能放入容器并不等于上游会执行 Ascend 的扩展逻辑。<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/config/vllm.py#L425">上游配置容器</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1334">Ascend 字段和校验</a></p></div></section>
+<section class="section"><h2>证据范围和使用前核验</h2><div class="panel"><p>源码确认机制与条件；单元测试、部署样例和实际 A3 / A5 精度性能验收是不同层次。MLP 是否命中具体 Shared Experts、实际量化方法是否支持 PCP weight switch，以及配置有没有被自动关闭，都需要在目标环境检查。</p><p><a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1364">配置条件与自动关闭</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L479">MLP 层识别</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/ops/test_vocab_parallel_embedding.py#L342">词表单测</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/attention/test_dsa_v1.py#L2975">O buffer 单测</a></p></div></section></div>
+<div id="report" class="view" hidden><div class="notice">以下为原分支报告的历史材料，保留供查阅；其中结论尚未全部逐条复核，请优先以本页面附链接的源码和目标部署版本为准。源码链接需要联网；正文和交互图可离线打开。</div><article class="report"><h1>DeepSeek V4 系列在 A3 / A5 上的矩阵切分：完整说明与配置指南</h1>
+<p>研究日期：2026-10-26。</p>
+<p>分析对象：DeepSeek-V4-Flash、DeepSeek-V4-Pro、DeepSeek-V4.1-Flash。代码基线：<code>vllm-ascend @ 365692e28ee33c5bff29e62cb0e67cc697f336ad</code>；上游对照：本地 <code>vllm @ ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc</code>。本报告结合三个 agent 的专项分析，按当前代码重新组织。</p>
+<p><strong>本文解释当前实现、配置条件和已知边界。本次未运行 A3 / A5 实机测试。“有实现”“有单元测试”“有模型部署配方”“完成专项硬件验收”分别表示不同强度的证据。</strong></p>
+<h2>1. 先明确：常规 TP、细粒度 TP、PCP 分别是什么</h2>
+<p>这三个概念容易混在一起。先按“使用哪个并行维度、影响哪些模块”区分：</p>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>使用的分组</th>
+<th>主要参数</th>
+<th>对本文模块的影响</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>常规 TP</td>
+<td>标准 TP 组</td>
+<td><code>--tensor-parallel-size T</code></td>
+<td>在普通路径下，三款模型的 O、Token Embedding、LM head 自动随 T 分片</td>
+</tr>
+<tr>
+<td>细粒度 TP</td>
+<td>沿 DP 轴构建的模块子组，固定标准 TP 索引</td>
+<td><code>additional_config.finegrained_tp_config</code></td>
+<td>对 O、Embedding、LM head、Dense MLP 分别设置切分数 K</td>
+</tr>
+<tr>
+<td>PCP</td>
+<td>额外的上下文并行组</td>
+<td><code>--prefill-context-parallel-size P</code></td>
+<td>分配长提示词计算；可同时对 O、Embedding、LM head 做 PCP 权重分片</td>
+</tr>
+</tbody></table>
+<p><strong><code>finegrained_tp_config</code> 一共有四项。OTP 是其中 O 投影的通信组；PCP 不在这四项里面。</strong></p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>细粒度配置键</th>
+<th>通信组</th>
+<th align="right">默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Attention O 投影</td>
+<td><code>oproj_tensor_parallel_size</code></td>
+<td>OTP</td>
+<td align="right">0</td>
+</tr>
+<tr>
+<td>Token Embedding</td>
+<td><code>embedding_tensor_parallel_size</code></td>
+<td>Embed-TP</td>
+<td align="right">0</td>
+</tr>
+<tr>
+<td>LM head</td>
+<td><code>lmhead_tensor_parallel_size</code></td>
+<td>LMTP</td>
+<td align="right">0</td>
+</tr>
+<tr>
+<td>可匹配的 Dense MLP 路径</td>
+<td><code>mlp_tensor_parallel_size</code></td>
+<td>MLP-TP</td>
+<td align="right">0</td>
+</tr>
+</tbody></table>
+<p>四项均沿 DP 轴建组，可以分别设置 K。例：标准 TP1、DP8、Embedding K4，表示每四个 DP rank 合作存储和计算一份 Embedding，共两组；模型的注意力并没有因此整体变成 TP4。[C1][C2]</p>
+<p>PCP 的权重开关位于 <code>additional_config</code> 顶层：</p>
+<table>
+<thead>
+<tr>
+<th>PCP 权重开关</th>
+<th>控制对象</th>
+<th>默认值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>enable_pcp_o_proj_weight_sharding</code></td>
+<td>O；DeepSeek 中是 <code>wo_a + wo_b</code></td>
+<td>true</td>
+</tr>
+<tr>
+<td><code>enable_pcp_embedding_lmhead_weight_sharding</code></td>
+<td>Token Embedding 与 LM head，二者共同控制</td>
+<td>true</td>
+</tr>
+</tbody></table>
+<p>只有 PCP&gt;1 且进入相应实现时，这些 PCP 开关才产生跨 PCP 分片。它们不是四个细粒度整数项的别名。</p>
+<h3>1.1 同时配置时，分片倍数怎样计算</h3>
+<p>设标准 TP 为 T、某模块细粒度大小为 K、PCP 为 P：</p>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>Embedding / LM head 每 rank 的词表权重行数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>纯标准 TP</td>
+<td>约 <code>V_padded / T</code></td>
+</tr>
+<tr>
+<td>启用该模块细粒度 TP</td>
+<td>约 <code>V_padded / K</code>，替代该模块的标准 TP 布局</td>
+</tr>
+<tr>
+<td>启用 PCP 词表权重分片</td>
+<td>约 <code>V_padded / (T×P)</code></td>
+</tr>
+</tbody></table>
+<p>例如原来 T4，改成细粒度 K2，会让每卡这块权重从 1/4 增到 1/2；K4 不再额外省权重；K8 才比原 T4 再少一半，并且 DP 必须能被 8 整除。不能把 T4、K4 理解成 16 份。[C3]</p>
+<h2>2. 三款模型与 A3 / A5 的支持范围</h2>
+<h3>2.1 模型结构与普通 TP 上限</h3>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th align="right">hidden H</th>
+<th align="right">注意力头 N</th>
+<th align="right">head dim d</th>
+<th align="right">O 分组 G</th>
+<th align="right">O 低秩 r</th>
+<th align="right">词表 V</th>
+<th>当前普通路径 TP 上限</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>V4 Flash</td>
+<td align="right">4096</td>
+<td align="right">64</td>
+<td align="right">512</td>
+<td align="right">8</td>
+<td align="right">1024</td>
+<td align="right">129280</td>
+<td>TP8</td>
+</tr>
+<tr>
+<td>V4 Pro</td>
+<td align="right">7168</td>
+<td align="right">128</td>
+<td align="right">512</td>
+<td align="right">16</td>
+<td align="right">1024</td>
+<td align="right">129280</td>
+<td>TP16</td>
+</tr>
+<tr>
+<td>V4.1 Flash</td>
+<td align="right">5120</td>
+<td align="right">64</td>
+<td align="right">512</td>
+<td align="right">8</td>
+<td align="right">1024</td>
+<td align="right">129280</td>
+<td>TP8</td>
+</tr>
+</tbody></table>
+<p>结构数值来自官方原始配置：<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/raw/main/config.json">V4 Flash</a>、<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/main/config.json">V4 Pro</a>、<a href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/raw/main/config.json">V4.1 Flash</a>。0731、0813、1017 和量化版必须检查实际权重配置，不应只按模型名套数值。</p>
+<p>这些 TP 上限在当前平台校验中不区分 A3 / A5；还要满足维度、量化和模型其他组件的约束。MRv1 的旧 DSA-CP 存在独立拓扑例外，本文的普通 TP 上限不把该例外混入。[C4]</p>
+<h3>2.2 三个重点模块的细粒度支持矩阵</h3>
+<table>
+<thead>
+<tr>
+<th>模型 / 硬件</th>
+<th>O 细粒度 TP</th>
+<th>OTP 通信 buffer 跨层复用</th>
+<th>Token Embedding 细粒度 TP</th>
+<th>LM head 细粒度 TP</th>
+<th>当前可见证据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>V4 Flash / A3</td>
+<td>有实现；仅合法 PD Decode</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>有公共实现</td>
+<td>有公共实现</td>
+<td>有 A3 模型配方；未找到三个细粒度项完整专项验收</td>
+</tr>
+<tr>
+<td>V4 Flash / A5</td>
+<td>有实现，包括 FP8 OTP 分支</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>有公共实现</td>
+<td>有公共实现</td>
+<td>有 A5 模型 YAML、A5 FP8 O 单测；不等于三项组合 E2E</td>
+</tr>
+<tr>
+<td>V4 Pro / A3</td>
+<td>与 V4 Flash 共用模型路径</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>有公共实现</td>
+<td>有公共实现</td>
+<td>有 A3 多节点部署资料；细粒度组合需专项测</td>
+</tr>
+<tr>
+<td>V4 Pro / A5</td>
+<td>同一 O 路径；K 可按 G=16 评估</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>有公共实现</td>
+<td>有公共实现</td>
+<td>有 950DT 原生混合精度及 PD 配方；细粒度组合需专项测</td>
+</tr>
+<tr>
+<td>V4.1 Flash / A3</td>
+<td>复用公共 O projector；仅合法 PD Decode</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>有公共实现；不控制 Engram 表</td>
+<td>有公共实现</td>
+<td>有 W8A8 A3 配方；其中 TP2/TP4 布局不能直接叠 OTP</td>
+</tr>
+<tr>
+<td>V4.1 Flash / A5</td>
+<td>复用公共 O projector；目标权重需专项验证</td>
+<td>已实现；有效 OTP 下自动复用</td>
+<td>已接入细粒度切分；未找到该模型在 A5 上的专项实测证据</td>
+<td>已接入细粒度切分；存在采样兼容限制，未找到该模型在 A5 上的完整组合实测证据</td>
+<td>A5 强制 MRv2；有 TP1/DP4/EP4 回归例子，非三项细粒度生产验收</td>
+</tr>
+</tbody></table>
+<p>这里“公共实现”表示模型构造了对应层，并由 Ascend 注册替换成支持相应布局的实现；不是仅凭通用文档推断。[C3][C5]</p>
+<p>“未找到专项实测证据”表示本报告收集到的证据覆盖有限，不表示代码不支持，也不表示需要额外开发才能开启。“采样兼容限制”指 LM head 切分需要同时满足 logits 汇集、采样与投机解码路径的约束，详见第 4.4 节。</p>
+<p>“OTP 通信 buffer 跨层复用”是独立确认的源码能力：V4 Flash / Pro 与 V4.1 Flash 均把模型级 <code>OProjBufferPool</code> 交给各层，没有针对 A3 / A5 禁用这套复用机制。有效 OTP 下，相同 shape、dtype、device 的顺序层复用 All-to-All 的发送 / 接收 buffer 和 Reduce-Scatter 输出 buffer，无需额外共享开关。该列表示已有实现；跨层复用单测不等于各模型在 A3 / A5 上的完整实机验收。[C5][C8]</p>
+<p>第四项 MLP 是框架级能力，但这三款模型的主干层使用 MoE。其 Routed Experts、Shared Experts 和可匹配的普通 MLP 必须分别分析，详见第 5 节，不能把第四项直接画成“三款模型全部 FFN 都已验证可切”。</p>
+<h3>2.3 两类硬件的额外边界</h3>
+<ul>
+<li>A3 / A5 没有针对上述四个细粒度字段的统一硬件禁用条件；真正差异来自 runner、算子、量化、内存容量和通信拓扑。</li>
+<li>仓库把 910C 系列归为 A3、<code>ascend950*</code> 归为 A5。部署仍需区分 950PR / 950DT、逻辑设备数和互联，不能照搬 A3 的设备数量。</li>
+<li>V4.1 A5 <strong>必须</strong> <code>VLLM_USE_V2_MODEL_RUNNER=1</code>。A3 主教程使用 MRv1，不能把其 runner 设置直接复制到 A5。</li>
+<li>V4.1 启用 Engram 时平台要求 TP=1/2/4/8、PP=DCP=1，并拒绝 Ascend Engram 的 <code>embedding_across_dp</code> 配置。它与 Token Embedding 的细粒度开关独立。[C4][C6]</li>
+</ul>
+<h2>3. 常规 TP：三个重点模块会自动切分</h2>
+<h3>原理与开启方式</h3>
+<p>在普通 TP 路径下，只要 T&gt;1 且模型配置合法，三款模型的 O、Token Embedding、主 LM head 都自动随 T 切分，不需要开启 <code>finegrained_tp_config</code>。</p>
+<pre><code class="language-bash">--tensor-parallel-size 4
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>普通 TP 如何切</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>O 投影</td>
+<td>按注意力头 / O 组分配，<code>wo_a</code> 和 <code>wo_b</code> 配套切分，每 rank 处理 G/T 个 O 组</td>
+</tr>
+<tr>
+<td>Token Embedding</td>
+<td>按词表行分片，每 rank 约 <code>[V_padded/T,H]</code>，查表贡献归约后得到完整向量</td>
+</tr>
+<tr>
+<td>LM head</td>
+<td>按输出词表分片，每 rank 计算局部词表 logits，再按采样路径汇聚</td>
+</tr>
+</tbody></table>
+<h3>开启条件与叠加边界</h3>
+<ul>
+<li>T=1 无实际标准 TP 切分；合法 T 需满足第 2 节上限及模型维度整除。</li>
+<li>Embedding / LM head 的细粒度字段保持 0，才能沿用这两个模块的默认标准 TP 计划。</li>
+<li>如果 PCP&gt;1 且默认词表分片开启，Embedding / LM head 改为 TP×PCP 布局。</li>
+<li>O 细粒度 K&gt;1 与标准 T&gt;1 不兼容，配置会拒绝。PCP 的 O 权重分片则有自己的条件，见第 6 节。</li>
+<li>标准 TP 的 O 分片可用于一体部署、Prefill 和 Decode，不受“细粒度 OTP 仅限 PD Decode”的限制。</li>
+<li>标准 TP 只说明并行层如何布局，不表示所有权重都切分；模型仍可能包含 ReplicatedLinear、复制的 draft head 等。[C3][C5]</li>
+</ul>
+<h2>4. 细粒度 O、Embedding、LM head：逐项说明</h2>
+<p>以下命令均为<strong>合并到已成功启动的目标模型基线中的配置增量</strong>，在目标 Linux / CANN / torch_npu 环境使用。模型路径、量化、tokenizer、网卡和多节点启动方式沿用基线。一条服务命令只保留一份合并后的 <code>--additional-config</code>。</p>
+<h3>4.1 三项及 MLP 的共同条件</h3>
+<ul>
+<li>模型被正确识别为 MoE；非 MoE 配置会被拒绝。</li>
+<li>K 为非负整数；非零 K 必须整除全局 DP，即 <code>DP % K == 0</code>。多节点不能用 local DP 代替全局 DP。</li>
+<li>实际分片使用 K&gt;1。Embedding / LM head / MLP 的代码以 K&gt;0 进入细粒度路径；K=1 不是“恢复默认”。O 则以 K&gt;1 启用。</li>
+<li>四项默认 0，仅关闭对应细粒度计划，不关闭常规 TP。</li>
+<li>官方细粒度指南将 PP&gt;1 列为不支持组合。本文按 <strong>PP=1 的文档支持边界</strong>推荐；本次未找到覆盖四项的统一 PP 拒绝校验，不能保证误配一定在启动时报错。</li>
+<li>子组各 rank 必须使用一致的相关容量、投机长度等配置，并在执行 collective 时共同参与。空闲 rank 也可能需要 dummy 计算。</li>
+<li>EP 是常见 MoE 部署拓扑，示例会启用；不能把“存在某个单独字段”当作整个 MoE / DP / EP 拓扑已合法。[C1][C2][C7]</li>
+</ul>
+<h3>4.2 O 投影细粒度 TP：<code>oproj_tensor_parallel_size</code></h3>
+<p><strong>切什么、如何计算</strong></p>
+<p>DeepSeek 的 O 不是一个简单完整矩阵，而是两级、分组低秩投影：</p>
+<pre><code class="language-text">注意力输出 [B,N,d]
+  → 按 G 组重排 [B,G,N*d/G]
+  → 每组 wo_a 降到 r 维
+  → 拼接 [B,G*r]
+  → wo_b 映射回 [B,H]
+</code></pre>
+<p>用行向量写法：<code>Z_g=A_g W_a,g</code>，<code>Y=Σ_g Z_g W_b,g</code>。把完整 O 组分给 K 个设备，每个设备保存相应的 <code>wo_a</code> 和 <code>wo_b</code> 权重。DP rank 的请求不同，所以还需要交换请求数据：</p>
+<pre><code class="language-text">本 rank 注意力输出按 O 组分块并填充
+  → all_to_all，送到相应 O 组权重 owner
+  → 本地 wo_a + wo_b，得到部分和
+  → reduce_scatter，求和并返回原请求所属 DP rank
+</code></pre>
+<p>两级权重都切；不是仅切最后一个 <code>wo_b</code>。量化在 all-to-all 之后执行，通信 buffer 保持输入 dtype。A5 的低精度 GEMM不等于整个通信也采用 FP8。[C8]</p>
+<p><strong>怎么开启</strong></p>
+<p>在满足下方全部条件的 D 节点上，设置：</p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--prefill-context-parallel-size 1 \
+--enable-expert-parallel \
+--max-num-seqs 64 \
+--compilation-config &#39;{&quot;cudagraph_mode&quot;:&quot;FULL_DECODE_ONLY&quot;,&quot;max_cudagraph_capture_size&quot;:512}&#39; \
+--additional-config &#39;{
+  &quot;scheduler_config&quot;:{&quot;recompute_scheduler_enable&quot;:true},
+  &quot;finegrained_tp_config&quot;:{&quot;oproj_tensor_parallel_size&quot;:8}
+}&#39;
+</code></pre>
+<p>还必须配置 PD connector 与 <code>PreemptOffloadConnector</code>，完整结构见第 7.2 节。上述 512 是演示值，不是固定推荐值。</p>
+<p><strong>开启条件、互斥与失败行为</strong></p>
+<table>
+<thead>
+<tr>
+<th>条件 / 组合</th>
+<th>当前行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>K&gt;1，且 K 整除 DP</td>
+<td>实际建立 OTP 组；不合法的 DP 整除配置拒绝</td>
+</tr>
+<tr>
+<td>K 整除 <code>n_local_groups</code></td>
+<td>O 构造 / 运行校验；在标准 TP1 下等价于 K 整除 G</td>
+</tr>
+<tr>
+<td>标准 TP&gt;1</td>
+<td>硬拒绝；O 组 reshape 与跨 DP 权重轴尚不能直接叠加</td>
+</tr>
+<tr>
+<td>一体部署、P 节点、无 <code>kv_consumer</code></td>
+<td>不在支持范围，配置拒绝</td>
+</tr>
+<tr>
+<td>未开启 recompute scheduler</td>
+<td>硬拒绝</td>
+</tr>
+<tr>
+<td>connector 链没有 PreemptOffloadConnector</td>
+<td>硬拒绝；需通过 MultiConnector 与 PD connector 组合</td>
+</tr>
+<tr>
+<td>eager / <code>--enforce-eager</code></td>
+<td>不支持；运行时也检查是否落入非图步骤</td>
+</tr>
+<tr>
+<td>PCP&gt;1</td>
+<td>硬拒绝</td>
+</tr>
+<tr>
+<td>PP&gt;1</td>
+<td>文档支持边界之外；推荐 PP1</td>
+</tr>
+<tr>
+<td>投机解码</td>
+<td>不一概禁止，但须放大图容量，并满足 draft / runner / 模型自身限制</td>
+</tr>
+<tr>
+<td>与 Embedding / LM head 细粒度同时开</td>
+<td>可以，逐项满足各自条件；K 可不同</td>
+</tr>
+</tbody></table>
+<p>按本文官方原始配置，Flash / V4.1 的实际 K 候选是 2/4/8，Pro 是 2/4/8/16，还须整除实际 DP。不能只因为 DP16 就给 Flash 设置 OTP16。</p>
+<p>最大 Decode 步按下式评估：</p>
+<pre><code class="language-text">max_step = min(max_num_batched_tokens,
+               max_num_seqs * (1 + num_speculative_tokens))
+</code></pre>
+<p>capture 上限不足时，启动代码会告警并把 O / MLP 细粒度值重置为 0，服务仍可能启动成功。运行时超过静态容量或落入 eager 步会显式失败。投机 token=5、max_num_seqs=64 时可能需要覆盖 384 tokens，不能仍按 64 配置。</p>
+<p><strong>通信 buffer 如何跨层复用</strong></p>
+<p>V4 Flash / Pro 和 V4.1 Flash 在模型构造时创建一个 <code>OProjBufferPool</code>，交给各层 O 投影实现，并在 KV profiling 前预留地址稳定的通信空间。池按 <code>(shape, dtype, device)</code> 缓存：兼容层直接取得同一组 <code>_oproj_send_buf</code>、<code>_oproj_recv_buf</code> 和 <code>_oproj_rs_out_buf</code>；布局不同则分别分配。由于各层顺序执行，同一 rank 内可以跨层复用这些临时空间，并保持图捕获 / 回放地址稳定。[C5][C8]</p>
+<p>无需单独设置共享开关。<code>oproj_tensor_parallel_size &gt; 1</code> 且通过本节全部条件、未被启动校验重置为 0 时，自动预留并复用；未启用 OTP 时不分配这套专用 buffer。这里共享的是通信临时空间，各层 O 权重仍分别保存，各 rank 也各有自己的 buffer。假设 L 层所需布局完全相同，这三类 buffer 从逐层分配的 L 组降为一组，但不代表整个 O 计算的所有中间张量都只保留一份。单测明确检查同一模型各层引用相同 buffer、不同模型分别分配，以及不兼容布局分别分配。[C8]</p>
+<p>这部分共享 buffer 的显存仍需纳入净收益。开启此路径后，某些 offload 恢复失败会中止请求，避免返回 P 端重算造成 KV 精度变化。[C8][C9]</p>
+<h3>4.3 Token Embedding 细粒度 TP：<code>embedding_tensor_parallel_size</code></h3>
+<p><strong>切什么、如何计算</strong></p>
+<p>权重为 <code>E[V,H]</code>，按词表行分片。每个 rank 保存约 <code>[V_padded/K,H]</code>，H 维保持完整。</p>
+<p>DP rank 的 token 不同，因此先把 token ID 填充到统一容量后 all-gather；每卡查自己的词表片，非本地 ID 的贡献为零；随后 reduce-scatter，把完整向量返回原 token owner。</p>
+<pre><code class="language-text">本 rank token IDs
+  → 固定容量 padding + all_gather
+  → 本地词表分片查表、非本地 ID 置零
+  → reduce_scatter
+  → 本 rank 的完整 H 维 Embedding
+</code></pre>
+<p>固定容量覆盖 <code>max(potential_max_tokens,max_num_batched_tokens)</code>，可处理 Prefill；不是只为 Decode 小批次设计。[C3]</p>
+<p><strong>怎么开启</strong></p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--enable-expert-parallel \
+--additional-config &#39;{
+  &quot;finegrained_tp_config&quot;:{&quot;embedding_tensor_parallel_size&quot;:8}
+}&#39;
+</code></pre>
+<p><strong>开启条件、互斥与边界</strong></p>
+<table>
+<thead>
+<tr>
+<th>条件 / 组合</th>
+<th>当前行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MoE；K 整除 DP；padding 后词表能按分片数划分</td>
+<td>必须满足；词表使用 divide 等检查</td>
+</tr>
+<tr>
+<td>K=0</td>
+<td>不采用该细粒度计划，仍可使用标准 TP</td>
+</tr>
+<tr>
+<td>K=1</td>
+<td>采用 size1 的细粒度计划；可能把原标准 TP 分片变成完整权重</td>
+</tr>
+<tr>
+<td>标准 TP&gt;1</td>
+<td>可同时配置；该模块改按 K 分，不是 T×K</td>
+</tr>
+<tr>
+<td>eager / graph、Prefill / Decode、一体 / PD</td>
+<td>公共实现支持；不要求 recompute 或 PreemptOffload</td>
+</tr>
+<tr>
+<td>PCP&gt;1 且 PCP 词表权重分片为 true</td>
+<td>与本项硬互斥</td>
+</tr>
+<tr>
+<td>关闭 PCP 词表分片后再叠细粒度</td>
+<td>不作为已验证通用组合推荐；跨 DP 组布局与 PCP 拓扑仍需验证。本文细粒度示例统一 PCP1</td>
+</tr>
+<tr>
+<td>PP&gt;1</td>
+<td>文档不支持；推荐 PP1</td>
+</tr>
+<tr>
+<td>MTP / DSpark</td>
+<td>不天然互斥；需核实 draft 是共享目标 Embedding，还是独立构造了其他分片计划</td>
+</tr>
+<tr>
+<td>V4.1 Engram 表</td>
+<td>不受本项控制；CPU offload、主机共享内存和 Engram head 分片另行配置</td>
+</tr>
+</tbody></table>
+<p>主要收益是整张词表的常驻内存减少。Embedding 是查表，整表缩小到 1/K 不表示每个 token 的实际读取量也减少 K 倍。Prefill 容量设得很大时，固定容量通信也可能带来额外成本。[C3][C6]</p>
+<h3>4.4 LM head 细粒度 TP：<code>lmhead_tensor_parallel_size</code></h3>
+<p><strong>切什么、如何计算</strong></p>
+<p>逻辑权重为 <code>W[V,H]</code>，输入 <code>X[B,H]</code>，logits 为 <code>XWᵀ</code>。按输出词表切分，每 rank 保存约 <code>[V_padded/K,H]</code>。</p>
+<pre><code class="language-text">本 rank 待采样隐藏状态 [B,H]
+  → padding 到统一容量 + all_gather
+  → 本地 GEMM，计算所有请求的局部词表 logits
+  → all_to_all，按请求 owner 重排
+  → 本 rank 请求的完整词表 logits [B,V]
+  → 正常采样
+</code></pre>
+<p>空闲 DP rank 必须参与同形状的 dummy logits collective；否则活跃 rank 可能挂起。最终采样前仍恢复本 rank 的完整 V 维 logits，因此峰值 logits 内存与总计算量不会自动下降 K 倍。[C10]</p>
+<p><strong>怎么开启</strong></p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--enable-expert-parallel \
+--additional-config &#39;{
+  &quot;finegrained_tp_config&quot;:{&quot;lmhead_tensor_parallel_size&quot;:8}
+}&#39;
+</code></pre>
+<p><strong>开启条件、互斥与 runner 差异</strong></p>
+<table>
+<thead>
+<tr>
+<th>条件 / 特性</th>
+<th>当前边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MoE；K 整除 DP；词表分片维度合法</td>
+<td>必须满足</td>
+</tr>
+<tr>
+<td>K=0 / K=1</td>
+<td>0 保留默认计划；1 进入 size1 细粒度计划，可能增加原 TP 部署的权重占用</td>
+</tr>
+<tr>
+<td>标准 TP&gt;1</td>
+<td>可同时配置，head 按 K 分而非 T×K</td>
+</tr>
+<tr>
+<td>eager / graph、Prefill / Decode、一体 / PD</td>
+<td>公共实现支持，不要求 O 路径的 recompute/offload 条件</td>
+</tr>
+<tr>
+<td><code>enable_batch_sharded_sampling</code></td>
+<td>与细粒度 LM head 硬互斥</td>
+</tr>
+<tr>
+<td>PCP&gt;1 且 PCP 词表分片 true</td>
+<td>与本项硬互斥；本文采用 PCP1</td>
+</tr>
+<tr>
+<td>PP&gt;1</td>
+<td>文档不支持；推荐 PP1</td>
+</tr>
+<tr>
+<td>prompt logprobs、fixed-token prompt scoring</td>
+<td>MRv2 明确拒绝；MRv1 未找到同等保护，额外未对齐 logits 调用有风险，不作为支持组合推荐</td>
+</tr>
+<tr>
+<td>正常生成阶段的 logprobs</td>
+<td>不应与 prompt logprobs 混为一谈；前述限制不是对所有生成 logprobs 的统一禁令</td>
+</tr>
+</tbody></table>
+<p>投机解码需要继续区分 MRv1 / MRv2，不能写成“开了 MTP 就不能切 head”，也不能把某个 runner 的检查推广给全部路径：</p>
+<table>
+<thead>
+<tr>
+<th>投机组合</th>
+<th>当前判断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MTP / EAGLE、DFlash、DSpark 的相关公共路径</td>
+<td>有行数 padding / trim 的适配；仍需按模型、runner、实际 draft head 验证</td>
+</tr>
+<tr>
+<td>MRv2 的概率式 draft sampling</td>
+<td><code>draft_sample_method=probabilistic</code> 在相应适配路径明确拒绝</td>
+</tr>
+<tr>
+<td>MRv2 <code>use_local_argmax_reduction</code></td>
+<td>明确拒绝；局部词表 argmax 不能替代完整跨 DP 词表结果</td>
+</tr>
+<tr>
+<td>MRv2 <code>enable_adaptive_verification</code></td>
+<td>明确拒绝；行数对齐与估计器 buffer 尚不兼容</td>
+</tr>
+<tr>
+<td>DFlash2</td>
+<td>MRv2 明确拒绝；MRv1 不能仅因没有相同报错就认定支持，其候选 TopK 路径未满足这里的跨 DP 词表通信契约</td>
+</tr>
+<tr>
+<td>MRv1 的概率 / argmax / adaptive 等组合</td>
+<td>有不同实现与控制路径，不能套用 MRv2 全部硬禁令，也不据此给出未经验证的支持承诺</td>
+</tr>
+</tbody></table>
+<p><code>disable_tp=True</code> 的复制式 draft / Markov head 应保持复制，不能因名字中包含 head 就进入目标 head 的 LMTP 通信。旧文档出现过 <code>enable_reduce_sample</code>，但当前生产代码未找到对应控制，不列为当前有效的硬互斥参数。[C10][C11]</p>
+<h2>5. 第四项：MLP 细粒度 TP 应怎样理解</h2>
+<h3>5.1 原理与开启方式</h3>
+<p>对于可匹配的 Dense FFN，例如 <code>gate_up_proj → activation → down_proj</code>，按 FFN 中间维度切分：</p>
+<pre><code class="language-text">本 rank hidden states
+  → MLP-TP 组 all_gather
+  → 本地 gate/up 中间维分片
+  → 本地 activation 与 down 分片，得到部分和
+  → reduce_scatter 返回原请求 owner
+</code></pre>
+<p>与 Embedding / LM head 不同，MLP collective 形状随实际 token 数变化，各 rank 每一步必须满足对齐要求。因此它与 O 一起被约束在图调度的 PD Decode 场景。[C12]</p>
+<p>在有适配 Dense MLP 路径的 MoE 模型 D 节点上：</p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--prefill-context-parallel-size 1 \
+--enable-expert-parallel \
+--compilation-config &#39;{&quot;cudagraph_mode&quot;:&quot;FULL_DECODE_ONLY&quot;,&quot;max_cudagraph_capture_size&quot;:512}&#39; \
+--additional-config &#39;{
+  &quot;scheduler_config&quot;:{&quot;recompute_scheduler_enable&quot;:true},
+  &quot;finegrained_tp_config&quot;:{&quot;mlp_tensor_parallel_size&quot;:8}
+}&#39;
+</code></pre>
+<p>同样必须配置第 7.2 节的 PD + PreemptOffload connector 链。此例展示框架入口，不能作为三款 V4 模型的通用已验收配方。</p>
+<h3>5.2 开启条件与互斥</h3>
+<ul>
+<li>MoE、K 整除 DP，还须满足具体 MLP 的中间维度等权重分片条件。</li>
+<li>真正 K&gt;1 分片时要求标准 TP1、PCP1、合法 PD Decode、graph、recompute scheduler、PreemptOffload；PP1 按文档支持边界处理。</li>
+<li>capture 上限不足会与 O 一起被自动清零；运行时 eager 步会被保护性拒绝。</li>
+<li>可与其他三个细粒度模块配置同时存在，但每项各自满足条件。</li>
+<li>K=1 也会进入 MLP 细粒度选择，且当前 recompute 检查对 MLP 使用 K&gt;0；不要用 1 作为“关闭”。关闭用 0。</li>
+<li>不能把本项当成 Routed Experts 的 EP 配置；量化方法、shared-expert 布局与层识别仍需单独核实。[C1][C9][C12]</li>
+</ul>
+<h3>5.3 三款 V4 模型为什么不能直接照搬 R1 的 MLP 结论</h3>
+<p>R1 的典型用途是切前几层独立 Dense MLP。当前三款目标模型的 decoder 主干都构造 MoE，不能直接套用“R1 前三层省多少显存”的数字。</p>
+<p>还必须核对代码实际命中的层：当前 hook 根据 <code>gate_up_proj/down_proj</code> 前缀以及 <code>is_moe_layer(prefix)</code> 判断，而后者读取 <code>first_k_dense_replace</code>、<code>moe_layer_freq</code> 等配置，不是直接检查模块类型。</p>
+<p>官方原始配置没有 <code>first_k_dense_replace</code>。若运行时配置对象也没有补该字段，当前判断默认 infinity，可能让独立 Shared Experts 的 gate/up/down 进入 MLP hook；Shared Experts 被融合时又可能不存在这些独立层。<code>enable_shared_expert_dp</code> 还会按 EP 与标准 TP&gt;1 归一，而真正 MLP K&gt;1 要求标准 TP1，所以不能只凭命令写了该 boolean 就判定实际布局。</p>
+<p>因此，本报告对三款模型给出的判断是：<strong>MLP 是框架支持的第四项；目标模型实际切到哪些 MLP / Shared Expert 层需看运行时配置和对象，不把所有 MoE 专家或所有 Shared Experts 统一标成已支持、已验收。</strong> 这是静态发现的条件路径，尚无本次硬件数值与性能验证。[C12]</p>
+<p>对本文三款目标模型，建议该项默认保持 0；只有确认运行时 HF 配置、实际 custom op、Shared Experts 融合方式，并完成通信与精度对照后再开启。参数校验通过不能代替这一验证。</p>
+<h2>6. PCP 权重切分：两个开关分别说明</h2>
+<h3>6.1 PCP 本身的共同前置条件与叠加限制</h3>
+<p>PCP 用额外 rank 分担长提示词的 token 计算；并行规模会额外乘 P，它不是沿 DP 复用 rank 的细粒度 TP。</p>
+<p>例如 PP1、标准 TP1、DP2、PCP8，逻辑并行规模为 16 个设备 rank；不能把它和“TP1、DP8、某模块细粒度 K8”的 8 个 rank 当成同一个拓扑。</p>
+<pre><code class="language-bash">export VLLM_USE_V2_MODEL_RUNNER=1
+
+# 将下列参数合并到已验证的目标模型部署。
+--prefill-context-parallel-size 8
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>条件 / 组合</th>
+<th>PCP 的当前边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MRv1</td>
+<td>不支持 PCP，平台拒绝；使用 MRv2</td>
+</tr>
+<tr>
+<td>旧 <code>enable_dsa_cp=true</code></td>
+<td>与 PCP 硬互斥；旧 DSA-CP 本身也不支持 MRv2</td>
+</tr>
+<tr>
+<td>encoder-decoder、LoRA</td>
+<td>当前 PCP manager 明确拒绝</td>
+</tr>
+<tr>
+<td>整体 <code>cudagraph_mode=FULL</code></td>
+<td>PCP 不支持；可选 eager、PIECEWISE、FULL_AND_PIECEWISE、FULL_DECODE_ONLY 等受支持模式</td>
+</tr>
+<tr>
+<td>投机解码</td>
+<td>manager 仅接受相应 MTP / Eagle3 / DSpark 方法；具体 backend 继续限制，V4 DSA 主要为 MTP/DSpark，V4.1 DSA 为 DSpark</td>
+</tr>
+<tr>
+<td>adaptive verification</td>
+<td>PCP 投机路径不支持；动态 draft 长度不在当前验证范围</td>
+</tr>
+<tr>
+<td>PD 分离</td>
+<td>文档要求 PCP 仅放在 P 节点，D 节点 PCP1；不要因为 backend 内部有 decode 分片实现就推定 PD D 端可开 PCP</td>
+</tr>
+<tr>
+<td>PP + PCP</td>
+<td>需模型支持；MooncakeConnectorV1 / MooncakeHybridConnector 有限制，PP+PCP 使用相应 MooncakeConnectorV2 配方</td>
+</tr>
+<tr>
+<td>KV Cache Pool + PCP</td>
+<td>文档范围为 AscendStoreConnector、<code>use_layerwise=false</code></td>
+</tr>
+<tr>
+<td>DCP + PCP</td>
+<td>MLA/SFA/GQA 有各自支持表；不能套用到本文 DeepSeek DSA/V4.1。本文不推荐给这三款模型叠 DCP；V4.1 另有明确 DCP1 要求</td>
+</tr>
+</tbody></table>
+<p>上述限制有些来自平台 / manager 的硬检查，有些是 backend / connector 的文档支持范围，并不保证所有误配都同样在同一阶段报错。[C6][C13]</p>
+<h3>6.2 PCP O 权重分片</h3>
+<p><strong>开关与原理</strong></p>
+<pre><code class="language-bash">--prefill-context-parallel-size 8 \
+--additional-config &#39;{&quot;enable_pcp_o_proj_weight_sharding&quot;:true}&#39;
+</code></pre>
+<p>boolean 默认 true。DeepSeek 使用共享的 DSA-PCP 两级 O 实现；常驻权重按 PCP O 组分片。</p>
+<table>
+<thead>
+<tr>
+<th>执行类型</th>
+<th>O 的工作方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>含 Prefill 的步骤</td>
+<td>可临时 all-gather TP 本地完整 O 权重，为本地 token 计算，随后恢复常驻 shard</td>
+</tr>
+<tr>
+<td>分片式 Decode</td>
+<td>聚合 token，使用本地 O 组计算，再 reduce-scatter</td>
+</tr>
+<tr>
+<td>复制式 Decode 的通用实现</td>
+<td>本地 O 组计算后 PCP all-reduce；不据此宣称目标模型的任意 DCP 拓扑已支持</td>
+</tr>
+</tbody></table>
+<p>PCP&gt;1、DCP1 会选择相应分片式 Decode 策略。它可以用于一体 PCP 服务中的 Decode，不代表 PD 分离的 D 端允许 PCP&gt;1。</p>
+<p><strong>条件、互斥与回退</strong></p>
+<ul>
+<li>标准 TP 与 PCP 的 O 组布局必须合法，尤其 <code>G/T</code> 能被 P 整除；例如 Flash G8、T4 时 P8 不合法，T1/P8 才满足该项结构条件。</li>
+<li><code>wo_a</code>、<code>wo_b</code> 的具体权重方法都必须支持 weight switch。不能由模型标为 W8A8、MXFP8 或 BF16 就一概断定兼容，应检查实际方法能力。</li>
+<li>初始化阶段发现 O 组无法整除或方法不支持时，会告警并关闭 PCP O 分片，回退普通 O 权重。后续 loader / shape 错误不保证自动回退，可能直接失败。</li>
+<li>不能与 O 细粒度 K&gt;1 同开；后者已要求 PCP1。</li>
+<li>不要求细粒度 OTP 的“仅 PD D、recompute、PreemptOffload”条件；必须满足 PCP 自己的条件。</li>
+<li>完整权重 scratch pool 可能在 warmup 分配并继续常驻。不能把“常驻每层权重已分片”解释成“运行期间不存在任何完整 O buffer”。</li>
+</ul>
+<p>关闭时：<code>&quot;enable_pcp_o_proj_weight_sharding&quot;:false</code>。这只关闭 O 的 PCP 权重分片，不关闭 PCP 本身，也不关闭词表分片。[C14]</p>
+<p>量化方面，当前 BF16、W8A8 dynamic/static、MXFP8、FP8 block、部分 MXFP4 方法具备 weight-switch 基础能力；<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/quantization/methods/w8a8/w8a8fp8_dynamic.py#L42">W8A8FP8Dynamic</a> 明确不支持。此处只是在说明权重切换接口，不能据此给某个 checkpoint 的 O BMM 兼容性打勾：仍需 <code>wo_a</code> / <code>wo_b</code> 两侧方法、实际分片 shape、量化 pack/scale 对齐和对应 kernel 同时成立。</p>
+<h3>6.3 PCP Token Embedding 与 LM head 权重分片</h3>
+<p><strong>开关与原理</strong></p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--prefill-context-parallel-size 8 \
+--additional-config &#39;{&quot;enable_pcp_embedding_lmhead_weight_sharding&quot;:true}&#39;
+</code></pre>
+<p>boolean 默认 true，并同时控制这两个模块；没有在该开关下分别设置两个 PCP K 的接口。权重布局按 TP×PCP 切词表。</p>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>计算与通信</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Token Embedding</td>
+<td>PCP all-gather token IDs → 本地词表查表 → PCP reduce-scatter → 必要的 TP all-reduce</td>
+</tr>
+<tr>
+<td>LM head</td>
+<td>token 行在采样前恢复全局顺序 → 局部词表 GEMM → 先 PCP、再 TP 聚合词表 logits</td>
+</tr>
+</tbody></table>
+<p>PCP head 路径不使用细粒度 LMTP 的 DP all-to-all。[C3][C10]</p>
+<p><strong>条件、互斥与关闭方式</strong></p>
+<ul>
+<li>满足第 6.1 节 PCP 条件；padding 后词表须能按 TP×PCP 切分，实际 dtype / quant method 也须能正确加载对应片段。</li>
+<li>与 <code>embedding_tensor_parallel_size&gt;0</code>、<code>lmhead_tensor_parallel_size&gt;0</code> 分别互斥，构造时拒绝。即使细粒度值为 1，也可能触发互斥。</li>
+<li>与 <code>enable_batch_sharded_sampling</code> 硬互斥，这是联合开关的当前配置限制。</li>
+<li><code>disable_tp=True</code> 的复制式 head 优先保持复制，不会因 PCP boolean=true 就强行分片。</li>
+<li>可与 PCP O 权重分片一起使用，二者为独立 boolean。</li>
+<li>关闭用 <code>&quot;enable_pcp_embedding_lmhead_weight_sharding&quot;:false</code>；Token Embedding 与 LM head 退回各自普通 TP 布局，PCP 本身继续存在。</li>
+<li>不把细粒度 LMTP 的 prompt / draft 限制自动照搬到 PCP head；PCP 的限制应按自己的采样、runner 和 backend 路径判断。[C3][C7][C10]</li>
+</ul>
+<h2>7. 实际部署怎样组合</h2>
+<h3>7.1 一体部署：先评估两个边界模块</h3>
+<p>对于已验证的 TP1/DP8 MoE 基线，可先尝试：</p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--prefill-context-parallel-size 1 \
+--enable-expert-parallel \
+--additional-config &#39;{
+  &quot;finegrained_tp_config&quot;:{
+    &quot;embedding_tensor_parallel_size&quot;:8,
+    &quot;lmhead_tensor_parallel_size&quot;:8
+  }
+}&#39;
+</code></pre>
+<p>不需要额外开启 O 路径的 recompute / PreemptOffload。保留模型所需 runner、量化、KV、投机等基线设置，并检查第 4.4 节采样互斥。这里 DP8 不是 V4 Pro 能在任意八卡机器装下的保证。</p>
+<h3>7.2 PD Decode：O 加两个边界模块</h3>
+<p>只在 TP1、PCP1、PP1 的合法 Decode 拓扑使用；以下为示例配置：</p>
+<pre><code class="language-bash">--tensor-parallel-size 1 \
+--data-parallel-size 8 \
+--prefill-context-parallel-size 1 \
+--pipeline-parallel-size 1 \
+--enable-expert-parallel \
+--max-num-seqs 64 \
+--compilation-config &#39;{&quot;cudagraph_mode&quot;:&quot;FULL_DECODE_ONLY&quot;,&quot;max_cudagraph_capture_size&quot;:512}&#39; \
+--additional-config &#39;{
+  &quot;scheduler_config&quot;:{&quot;recompute_scheduler_enable&quot;:true},
+  &quot;finegrained_tp_config&quot;:{
+    &quot;oproj_tensor_parallel_size&quot;:8,
+    &quot;embedding_tensor_parallel_size&quot;:8,
+    &quot;lmhead_tensor_parallel_size&quot;:8
+  }
+}&#39;
+</code></pre>
+<p>将现有 PD connector 与 offload 合并成 <code>--kv-transfer-config</code>，结构示例如下：</p>
+<pre><code class="language-json">{
+  &quot;kv_connector&quot;:&quot;MultiConnector&quot;,
+  &quot;kv_role&quot;:&quot;kv_consumer&quot;,
+  &quot;kv_connector_extra_config&quot;:{
+    &quot;connectors&quot;:[
+      {
+        &quot;kv_connector&quot;:&quot;MooncakeConnectorV2&quot;,
+        &quot;kv_role&quot;:&quot;kv_consumer&quot;,
+        &quot;kv_port&quot;:&quot;30100&quot;,
+        &quot;kv_connector_extra_config&quot;:{
+          &quot;prefill&quot;:{&quot;dp_size&quot;:1,&quot;tp_size&quot;:1},
+          &quot;decode&quot;:{&quot;dp_size&quot;:8,&quot;tp_size&quot;:1}
+        }
+      },
+      {
+        &quot;kv_connector&quot;:&quot;PreemptOffloadConnector&quot;,
+        &quot;kv_role&quot;:&quot;kv_consumer&quot;,
+        &quot;kv_connector_extra_config&quot;:{&quot;cpu_bytes_to_use_per_rank&quot;:17179869184}
+      }
+    ]
+  }
+}
+</code></pre>
+<p>P/D topology、端口、connector 版本和 CPU offload 预算必须按已有部署修改；16 GiB/rank 是演示值。P 端保持匹配的 producer 配置。若实际 P 端用了 PCP/PP，应按该 connector 的 schema 与模型配方补齐 topology，不能原样照抄这里的 TP1 示例。</p>
+<p>MLP 项没有放进三款 V4 模型的组合示例；完成第 5 节实际命中层与精度验证后，才有依据加入对应 K。</p>
+<h3>7.3 长上下文 PCP：使用另一套权重布局</h3>
+<p>在合法的一体 PCP 服务或 PD Prefill 节点：</p>
+<pre><code class="language-bash">export VLLM_USE_V2_MODEL_RUNNER=1
+
+--tensor-parallel-size 1 \
+--prefill-context-parallel-size 8 \
+--additional-config &#39;{
+  &quot;enable_pcp_o_proj_weight_sharding&quot;:true,
+  &quot;enable_pcp_embedding_lmhead_weight_sharding&quot;:true
+}&#39;
+</code></pre>
+<p>这里不设置四项细粒度 K，不能保留旧 <code>enable_dsa_cp=true</code>。根据 backend 选择 eager / 受支持的 graph 模式，不使用整体 FULL。本例只是切分参数，完整部署继续沿用该模型的 PCP 配方。</p>
+<h2>8. 互斥关系速查</h2>
+<p>下表只汇总本报告范围内的主要边界；每项的 runner / backend / connector 条件以对应章节为准。没有硬检查不等于已支持。</p>
+<table>
+<thead>
+<tr>
+<th>组合</th>
+<th>O 细粒度</th>
+<th>Embedding 细粒度</th>
+<th>LM head 细粒度</th>
+<th>MLP 细粒度</th>
+<th>PCP 权重分片</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>标准 TP&gt;1</td>
+<td>禁止</td>
+<td>可配，改用 K</td>
+<td>可配，改用 K</td>
+<td>禁止</td>
+<td>可配，检查组 / 维度 / 量化</td>
+</tr>
+<tr>
+<td>PCP&gt;1</td>
+<td>禁止</td>
+<td>与默认 PCP 词表分片互斥；不推荐绕过后混用</td>
+<td>同左</td>
+<td>禁止</td>
+<td>必要条件</td>
+</tr>
+<tr>
+<td>PP&gt;1</td>
+<td>文档不支持</td>
+<td>文档不支持</td>
+<td>文档不支持</td>
+<td>文档不支持</td>
+<td>模型和 connector 条件支持；V4.1 Engram 仍要求 PP1</td>
+</tr>
+<tr>
+<td>eager</td>
+<td>禁止</td>
+<td>可</td>
+<td>可</td>
+<td>禁止</td>
+<td>可；PCP 不支持整体 FULL 图</td>
+</tr>
+<tr>
+<td>Prefill / 一体部署</td>
+<td>禁止</td>
+<td>可</td>
+<td>可</td>
+<td>禁止</td>
+<td>可，满足 PCP 条件</td>
+</tr>
+<tr>
+<td>PD Decode</td>
+<td>必须为此场景</td>
+<td>可</td>
+<td>可</td>
+<td>必须为此场景</td>
+<td>文档要求 D 端 PCP1</td>
+</tr>
+<tr>
+<td>batch-sharded sampling</td>
+<td>非本模块专属禁令</td>
+<td>非本模块专属禁令</td>
+<td>硬互斥</td>
+<td>非本模块专属禁令</td>
+<td>PCP 词表联合开关硬互斥</td>
+</tr>
+<tr>
+<td>投机解码</td>
+<td>按最大步扩 capture</td>
+<td>核实 draft Embedding</td>
+<td>详见 runner 相关限制</td>
+<td>核实步对齐 / 路径</td>
+<td>按 PCP backend / 方法支持表</td>
+</tr>
+<tr>
+<td>旧 DSA-CP</td>
+<td>不作为叠加推荐</td>
+<td>另需专门验证</td>
+<td>另需专门验证</td>
+<td>不作为叠加推荐</td>
+<td>硬互斥</td>
+</tr>
+</tbody></table>
+<h2>9. 上游 vLLM 与 GPU：支持边界怎样表述</h2>
+<p><strong>当前核查的上游 vLLM 没有 Ascend 这套 <code>finegrained_tp_config</code> 及三个主模块独立跨 DP 切分入口。GPU 硬件可以实现这样的方案，当前差别在推理框架的软件实现。</strong></p>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>当前本地上游 vLLM</th>
+<th>vLLM Ascend</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>常规 TP</td>
+<td>有</td>
+<td>有</td>
+</tr>
+<tr>
+<td>本文四项细粒度配置、分组和执行适配</td>
+<td>未发现该机制</td>
+<td>有</td>
+</tr>
+<tr>
+<td>通用 additional_config 容器</td>
+<td>有；不代表会执行其中任意扩展键</td>
+<td>用来消费 Ascend 扩展配置</td>
+</tr>
+<tr>
+<td>Embedding 自定义 parallel_group、部分 linear 的 tp_size 覆盖</td>
+<td>有底层接口</td>
+<td>配套实现模块计划、跨 DP 请求交换与调度</td>
+</tr>
+<tr>
+<td>V4.1 Engram 跨 DP 相关分片</td>
+<td>有独立实现</td>
+<td>有自己的支持策略；不等同于三个主矩阵开关</td>
+</tr>
+</tbody></table>
+<p>vLLM 主要服务 GPU 推理，包括 CUDA / ROCm，也能通过插件支持 Ascend 等设备。准确说法是“当前上游 GPU 路径未提供本文这套现成功能”，不是“GPU 不能切这些矩阵”——普通 TP 已经可以切。</p>
+<p>全仓搜索配置键后，还检查了上游配置、通信组、模型构造和 logits 路径，未发现等价接入。上游 <code>additional_config</code> 能携带 JSON，并不表示传入 Ascend 的键就生效；加载 Ascend 插件后获得的功能来自插件。[C15]</p>
+<h2>10. 显存收益、性能与生效验证</h2>
+<h3>10.1 估算时明确比较基线</h3>
+<p>相对标准 TP1 全量副本，某权重理想 K 分片节省约 <code>完整字节数×(1−1/K)</code>；若原来标准 TP=T，则比较的是 <code>完整字节数×(1/T−1/K)</code>。</p>
+<p>若输入 Embedding 与 LM head 分别为 BF16、未绑定权重、忽略 padding，二者 K8 相对 TP1 的理论节省为：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th align="right">单块完整权重 GiB</th>
+<th align="right">两块合计 GiB</th>
+<th align="right">两块 K8 理论节省 GiB/rank</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>V4 Flash</td>
+<td align="right">0.9863</td>
+<td align="right">1.9727</td>
+<td align="right">1.7261</td>
+</tr>
+<tr>
+<td>V4 Pro</td>
+<td align="right">1.7261</td>
+<td align="right">3.4521</td>
+<td align="right">3.0206</td>
+</tr>
+<tr>
+<td>V4.1 Flash</td>
+<td align="right">1.2329</td>
+<td align="right">2.4658</td>
+<td align="right">2.1576</td>
+</tr>
+</tbody></table>
+<p>O 两级投影每层理论参数量是 <code>N*d*r + H*G*r</code>，理想 K 分片后权重约为 1/K。实际应计入 scales、通信 buffer、权重聚合 scratch pool、图内存和 KV 容量变化。</p>
+<p>模型名字中的 W8A8 / W4A8 / MXFP4 不保证所有层采用同样位宽。Embedding、LM head、O 必须逐层检查实际 dtype 与量化 metadata。A5 已有低精度权重时，进一步切分的净收益需要重新测量。[C16]</p>
+<p>省显存也不保证加速：O 是逐层通信，LM head 需要为其他 DP 请求计算局部词表，Embedding 使用固定容量交换。仓库现有细粒度性能表测的是 <strong>A2、DeepSeek-R1-W8A8</strong>；其中 O TP8 在节省权重的同时使 TPOT 增加约 1.5ms。不能拿它当本文三模型在 A3/A5 的实测结果。[C7]</p>
+<h3>10.2 怎样确认真正生效</h3>
+<ol>
+<li>记录模型权重版本、插件 / vLLM commit、CANN、torch_npu、固件、设备型号与逻辑卡数量。</li>
+<li>检查 <code>finegrained_tp_config enabled</code> 中实际列出的字段和大小，同时查 O/MLP 的自动关闭告警。</li>
+<li>PCP O 查不支持分片的 fallback 告警；boolean=true 不代表没有回退。</li>
+<li>在调试环境确认实际层的分片计划、weight shape、dtype；MLP 还要确认具体命中了哪些层，不能只看配置对象。</li>
+<li>分别测试 baseline、单项开关与组合，固定负载 / KV / 投机 / capture 配置，测显存、KV 容量、TTFT、TPOT、吞吐与通信时间。</li>
+<li>覆盖空闲 DP rank、不均衡 batch、长 Prefill、graph 最大步、投机验证、抢占恢复和长时间运行。O/MLP 仅在合法 D 节点测试。</li>
+<li>验证任务输出与数据集精度；HTTP 200 只说明请求成功，不能证明权重已分片或精度已通过。</li>
+</ol>
+<pre><code class="language-bash">rg &#39;finegrained_tp_config enabled|Disabling oproj_tensor_parallel_size|DSA-PCP O-projection weight sharding is unavailable&#39; serve.log
+</code></pre>
+<p>本次有代码与单元测试内容核查，没有执行 pytest 或 NPU E2E。现有 A3/A5 模型配方多未显式开启这几个细粒度项，不能据其存在声称专项组合已经验收。未修改推理源码、未提交或推送。</p>
+<h2>11. 关键代码与文档索引</h2>
+<p>链接按研究时行号定位。Ascend 固定版本：<a href="https://github.com/vllm-project/vllm-ascend/tree/365692e28ee33c5bff29e62cb0e67cc697f336ad">365692e28</a>。部分教程仍保留“V4 不支持独立 TP”“V4.1 仅 MRv1”等旧表述，本文结合当前平台校验和硬件范围解释，不把旧描述推广到所有路径。</p>
+<ul>
+<li><strong>C1 配置定义与校验</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1334">四项字段</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1364">TP/PD/graph/PCP/capture 与 DP 校验</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/utils.py#L973">启用判断</a>。</li>
+<li><strong>C2 DP 轴模块组</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/distributed/parallel_state.py#L173">parallel_state.py</a>。</li>
+<li><strong>C3 词表三种布局与 Embedding 通信</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L93">布局优先级与互斥</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L245">分片分配</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L307">Embedding交换</a>。</li>
+<li><strong>C4 模型和硬件校验</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/platform.py#L1905">普通 TP 上限</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/test_platform.py#L2253">硬件无关上限测试</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/platform.py#L1002">A5 V4.1 强制 MRv2</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/device/hardware.py#L24">设备识别</a>。</li>
+<li><strong>C5 模型接入</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v4/model.py#L500">V4 O</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v4/model.py#L889">V4 模型级 OTP 池与预留</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v41/model.py#L381">V4.1 O</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v41/model.py#L979">V4.1 模型级 OTP 池与预留</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/utils.py#L860">公共算子注册</a>。</li>
+<li><strong>C6 Engram</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/platform.py#L1785">平台约束</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v41/model.py#L1058">独立表构造</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/docs/source/tutorials/models/DeepSeek-V4.1-Flash.md#L44">V4.1 A3配方</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/docs/source/tutorials/models/DeepSeek-V4.1-Flash.md#L1898">A5回归</a>。</li>
+<li><strong>C7 细粒度官方指南与采样互斥</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/docs/source/user_guide/feature_guide/Fine_grained_TP.md#L1">Fine_grained_TP.md</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L961">batch-sharded sampling互斥</a>。</li>
+<li><strong>C8 O 核心实现</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L98">跨层 buffer 池</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v1.py#L2149">buffer / 整除 / 通信</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/attention/test_dsa_v1.py#L2975">跨层共享单测</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/attention/test_dsa_v1.py#L3038">不兼容布局单测</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/quantization/methods/w8a8/w8a8_mxfp8.py#L665">A5 MXFP8 OTP加载</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/attention/test_dsa_v1.py#L3119">A5 FP8 OTP单测</a>。</li>
+<li><strong>C9 O/MLP 执行保护</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L830">recompute要求</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/platform.py#L1215">PreemptOffload要求</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/model_runner.py#L800">MRv2 graph guard</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/core/recompute_scheduler.py#L134">offload失败处理</a>。</li>
+<li><strong>C10 LM head/logits</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L525">PCP与细粒度通信</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/model_runner.py#L365">MRv2 prompt限制</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/model_runner.py#L690">idle rank</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/model_runner.py#L1097">行数对齐</a>。</li>
+<li><strong>C11 投机路径</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/spec_decode/lmhead_tp_utils.py#L33">MRv2限制</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/spec_decode/dspark/speculator.py#L106">MRv2 DSpark</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v1/spec_decode/llm_base_proposer.py#L1506">MRv1 proposer</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v1/spec_decode/dflash2_proposer.py#L49">MRv1 DFlash2</a>。</li>
+<li><strong>C12 MLP与Shared Experts</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L263">MLP通信</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L410">hook选择</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L479">层识别</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L752">shared DP归一</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v4/model.py#L760">V4 MoE构造</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/models/deepseek_v41/model.py#L821">V4.1 MoE构造</a>。</li>
+<li><strong>C13 PCP前置条件</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/platform.py#L1822">平台MRv2限制</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L711">DSA-CP互斥</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/worker/v2/pcp_manager.py#L318">PCP manager限制</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/docs/source/user_guide/feature_guide/context_parallel.md#L103">官方叠加范围</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_hybrid_connector.py#L1684">Hybrid connector边界</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/dsa_v41.py#L1605">V4.1不支持DCP</a>。</li>
+<li><strong>C14 PCP O</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L583">默认开关</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2584">资格检查与回退</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/dsa_cp.py#L2718">运行策略及权重池</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/attention/context_parallel/common_cp.py#L13">decode分片选择</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/weight_switch/linear.py#L458">weight switch</a>。</li>
+<li><strong>C15 上游对照</strong>：<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/config/vllm.py#L425">additional_config容器</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/vocab_parallel_embedding.py#L252">Embedding自定义组接口</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/vocab_parallel_embedding.py#L598">ParallelLMHead</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/model_executor/layers/logits_processor.py#L128">标准logits gather</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/models/deepseek_v4/attention.py#L212">V4 O</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/models/deepseek_v41/attention.py#L295">V4.1 O</a>、<a href="https://github.com/vllm-project/vllm/blob/ffcabb8c7ab3e066e1c77b55d7673e5d08cf26cc/vllm/config/engram.py#L40">Engram配置</a>。</li>
+<li><strong>C16 验证与量化</strong>：<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/quantization/configs/modelslim_config.py#L763">层级量化方法</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/ops/test_vocab_parallel_embedding.py#L342">Embedding/head单测</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/tests/ut/worker/test_model_runner_v2_finegrained_tp.py#L279">MRv2细粒度单测</a>、<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/docs/source/developer_guide/contribution/testing.md#L419">硬件验证要求</a>。</li>
+</ul>
+</article></div><footer class="footer">分析报告：rikakuhi/vllm-ascend · codex/deepseek-tp-a3-a5-report · 8c555d224 · 2026-10-26<br>代码基线：vllm-ascend 365692e28 / vLLm ffcabb8c。页面无需外部资源。</footer></div><script>
+const models={flash:{H:4096,N:64,d:512,G:8,r:1024},pro:{H:7168,N:128,d:512,G:16,r:1024},v41:{H:5120,N:64,d:512,G:8,r:1024}};const $=id=>document.getElementById(id);const fmt=n=>n.toLocaleString('en-US');
+function render(){const m=models[$('model').value],mode=$('mode').value,T=+$('tp').value,K=+$('otp').value,P=+$('pcp').value,DP=+$('dp').value;let valid=T<=m.G&&m.G%T===0;let reason=valid?'':'标准 TP 必须满足模型 O 组整除及普通 TP 上限。';if(mode==='otp'&&(T!==1||DP%K||m.G%K)){valid=false;reason='OTP 示意要求 T=1、DP 能被 K 整除且 G 能被 K 整除。'}if(mode==='pcp'&&valid&&(m.G/T)%P){valid=false;reason='PCP O 分片要求每个 TP rank 的 G/T 能被 P 整除；实际代码可能告警并回退。'}let parts=mode==='tp'?T:mode==='otp'?K:T*P;const q=m.N*m.d/m.G;const total=m.N*m.d*m.r+m.H*m.G*m.r; $('overview').innerHTML='<div class="summary"><div><strong>'+m.H+'</strong><span>隐藏维 H</span></div><div><strong>'+m.N+' × '+m.d+'</strong><span>注意力头 N × d</span></div><div><strong>'+m.G+'</strong><span>O 组 G</span></div><div><strong>'+fmt(total)+'</strong><span>每层 O 理论参数，未含量化元数据</span></div></div>'+(valid?'<div class="notice">结构检查通过：当前演示每份 '+(m.G/parts)+' 个 O 组。还需满足 runner、部署、量化和通信等完整条件。</div>':'<div class="callout"><strong>当前结构不满足：</strong>'+reason+'</div>');$('attention').textContent='[B, '+m.N+', '+m.d+']';$('group-shape').textContent='[B, '+m.G+', '+fmt(q)+']';$('wa-shape').textContent='每组 ['+fmt(q)+' → '+m.r+']';$('z-shape').textContent='[B, '+m.G+' × '+m.r+']';$('wb-shape').textContent='['+(m.G*m.r)+' → '+m.H+']';if(!valid){$('diagram').innerHTML='<p>调整上方参数以显示合法的 O 组分布。</p>';$('details').innerHTML='';return}let rows='';for(let i=0;i<parts;i++){let cells='';for(let g=0;g<m.G;g++){let on=Math.floor(g/(m.G/parts))===i;cells+='<div class="cell '+(on?'':'off')+'">'+(on?'G'+g:'·')+'</div>'}let name=mode==='pcp'?'T'+Math.floor(i/P)+' / P'+(i%P):mode==='otp'?'DP '+i:'TP '+i;rows+='<div class="shard"><strong>'+name+'</strong><div class="cells" style="grid-template-columns:repeat('+m.G+',minmax(28px,1fr))">'+cells+'</div></div>'} $('diagram').innerHTML='<div style="overflow:auto"><div class="shards" style="min-width:'+(m.G*32+100)+'px">'+rows+'</div></div><p class="legend">展示连续均分的逻辑组：具体 rank 顺序应以实际进程组和权重加载为准。</p>';$('details').innerHTML='<div class="grid"><div class="panel"><h3>每个 rank 的逻辑权重</h3><p>组数：<strong>'+m.G/parts+'</strong> / '+m.G+'；每组 wo_a ['+fmt(q)+', '+m.r+']，wo_b ['+m.r+', '+m.H+']。</p><p>理想参数：<strong>'+fmt(total/parts)+'</strong> / rank / 层。两个矩阵都随 O 组切分。</p></div><div class="panel"><h3>并行维度</h3><p>'+(mode==='tp'?'标准 TP 沿模型并行组切分，T='+T+'。':mode==='otp'?'OTP 沿 DP 轴建组，K='+K+'，本例全局 DP='+DP+'，共有 '+DP/K+' 个 OTP 子组。':'TP 与 PCP 嵌套：T='+T+'、P='+P+'；常驻 O 组按 T×P 分配。')+'</p><p class="muted">这只是 O 投影的权重示意，不代表模型所有层都这样切分。</p></div></div>'}
+function renderFeature(){const feature=$('feature').value,layout=$('layout').value,m=models[$('vmodel').value],T=+$('vt').value,K=+$('vk').value,P=+$('vp').value,V=129280;let parts=layout==='standard'?T:layout==='fine'?K:T*P;let title=feature==='embed'?'Token Embedding E[V,H]':feature==='head'?'LM head W[V,H]':'Dense MLP 中间维切分';let links='<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L93">词表计划</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L307">Embedding 执行</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/vocab_parallel_embedding.py#L525">LM head 与 logits</a>';let flow='',note='',shape='',boxes='';if(feature==='mlp'){links='<a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L263">MLP column / row 算子</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L410">前缀选择</a> · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ops/linear_op.py#L479">MoE 层判断</a>';if(layout==='pcpv'){shape='PCP 词表联合开关不控制 MLP。';flow='';note='选择标准 TP 或细粒度 TP 查看 MLP。';parts=0}else{shape='gate/up 的中间维分片 → activation → down 的对应输入维分片';flow=layout==='fine'?'本地 hidden → MLP 组 all-gather → gate/up 分片 → activation → down 部分和 → reduce-scatter':'标准并行线性层执行；具体归约由层配置决定。';note='仅展示可命中的 Dense MLP 路径。模型主干 MoE、Shared Experts 融合与 is_moe_layer 判断需要结合实际配置核实；不能推断所有专家都被切分。细粒度 K>1 有 TP1、PCP1、PD Decode、graph 等条件。'}}else{shape='逻辑矩阵 ['+fmt(V)+', '+fmt(m.H)+']；词表行按 '+parts+' 份切分，H 保持完整。示例忽略 padding：每份约 ['+fmt(V/parts)+', '+fmt(m.H)+']。';if(layout==='standard')flow=feature==='embed'?'本地词表查表，其他词表位置置零 → TP all-reduce 合并向量':'本地词表 logits → 按上游 / Ascend 正常 logits 路径汇集';if(layout==='fine')flow=feature==='embed'?'DP 组 padding token IDs → all-gather → 本地词表查表并 mask → reduce-scatter 回请求 owner':'DP 组 all-gather hidden states → 本地词表 GEMM → all-to-all 重排 → 请求 owner 的完整词表 logits';if(layout==='pcpv')flow=feature==='embed'?'PCP all-gather token IDs → 本地词表查表并 mask → PCP reduce-scatter → 必要的 TP all-reduce':'恢复全局 token 顺序 → 本地词表 GEMM → PCP all-gather logits → TP all-gather logits';note=layout==='fine'?'K 替代该模块的标准 TP 计划；K=1 也进入细粒度路径，关闭请用 0。K 必须整除全局 DP。':'词表 padding、实际 dtype、量化方法及复制式 head 会影响结果；PCP 词表开关与对应细粒度值 >0 互斥。';if(feature==='head')note+=' LM head 与 batch-sharded sampling 互斥；prompt logprobs 和投机功能需按 runner 路径检查。'}if(parts){for(let i=0;i<parts;i++){boxes+='<div class="cell">'+(feature==='mlp'?'FFN shard ':'词表片 ')+i+'</div>'}}$('feature-display').innerHTML='<div class="panel"><h3>'+title+'</h3><p>'+shape+'</p><div class="cells" style="grid-template-columns:repeat('+Math.max(1,Math.min(parts,8))+',minmax(80px,1fr));overflow:auto">'+boxes+'</div><h3 style="margin-top:20px">执行与通信</h3><pre style="white-space:pre-wrap">'+flow+'</pre><div class="callout">'+note+'</div><p style="margin-top:15px">源码依据：'+links+' · <a href="https://github.com/vllm-project/vllm-ascend/blob/365692e28ee33c5bff29e62cb0e67cc697f336ad/vllm_ascend/ascend_config.py#L1364">配置校验</a></p></div>'}document.querySelectorAll('select').forEach(e=>e.addEventListener('change',()=>{render();renderFeature()}));renderFeature();document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==b.dataset.view);document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x===b))}));render();
+</script></body></html>
