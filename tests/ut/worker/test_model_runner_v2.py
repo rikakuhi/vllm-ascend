@@ -24,6 +24,7 @@ from vllm.v1.worker.gpu.input_batch import InputBatch, InputBuffers
 from vllm.v1.worker.gpu.model_runner import BatchReqState, ExecuteModelState, GPUModelRunner
 from vllm.v1.worker.gpu.spec_decode.dflash.speculator import DFlashSpeculator
 
+from vllm_ascend import ascend_forward_context as afc
 from vllm_ascend.ascend_forward_context import MoECommType
 from vllm_ascend.attention.attention_c8_mxfp import (
     AscendC8MXFPAttentionBackendImpl,
@@ -1663,6 +1664,52 @@ def test_profile_run_dummy_reserves_mc2(moe_type, randomize_inputs):
     profile_kwargs = {"randomize_inputs": randomize_inputs}
     runner._dummy_run.assert_called_once_with(4, skip_attn=True, skip_eplb=True, is_profile=True, **profile_kwargs)
     parent.assert_called_once_with(**profile_kwargs)
+
+
+@pytest.mark.parametrize("token_budget", [384, 1024, 2048])
+def test_profile_run_megamoe_decode_buffer_covers_full_profile(monkeypatch, token_budget):
+    runner = _make_runner()
+    runner.model = torch.nn.Identity()
+    runner.max_num_tokens = token_budget
+    runner.max_num_reqs = 64
+    runner.ascend_config.enable_prefill_mc2 = False
+    runner.ascend_config.enable_fused_mc2 = 1
+    runner.ascend_config.scheduler_config.recompute_scheduler_enable = True
+    config = runner.vllm_config
+    config.parallel_config.tensor_parallel_size = 1
+    config.scheduler_config = SimpleNamespace(max_num_batched_tokens=token_budget)
+    config.kv_transfer_config = SimpleNamespace(kv_connector="MooncakeConnectorV2", kv_role="kv_consumer")
+    config.compilation_config = SimpleNamespace(
+        cudagraph_capture_sizes=[384],
+        max_cudagraph_capture_size=384,
+        decode_cudagraph_capture_request_sizes=None,
+    )
+    monkeypatch.setattr(afc, "_mc2_tokens_capacity", None)
+    monkeypatch.setattr(afc, "get_ascend_config", lambda: runner.ascend_config)
+    monkeypatch.setattr(afc, "use_cann_megamoe", lambda _: True)
+    afc.set_mc2_tokens_capacity(config, max_num_reqs=64, uniform_decode_query_len=6)
+
+    profiled_tokens = []
+
+    def profile(*args, **kwargs):
+        # Exercise the runner's handoff to upstream profiling with the real
+        # capacity calculation, rather than mocking the two independently.
+        profiled_tokens.append(runner.max_num_tokens)
+        assert runner.max_num_tokens <= afc.get_mc2_tokens_capacity()
+
+    runner._dummy_run = MagicMock()
+    with (
+        patch("vllm_ascend.worker.v2.model_runner.select_moe_comm_method", return_value=MoECommType.FUSED_MC2),
+        patch("vllm_ascend.worker.v2.model_runner.override_mrv2_in_profile_run", return_value=nullcontext()),
+        patch("vllm_ascend.worker.v2.model_runner.disable_compilation", return_value=nullcontext()),
+        patch.object(GPUModelRunner, "profile_run", side_effect=profile),
+    ):
+        runner.profile_run()
+
+    assert profiled_tokens == [token_budget]
+    assert runner.max_num_tokens == token_budget
+    assert config.compilation_config.max_cudagraph_capture_size == 384
+    runner._dummy_run.assert_not_called()
 
 
 @pytest.mark.parametrize("fail_warmup", [False, True])

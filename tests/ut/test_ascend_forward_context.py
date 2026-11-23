@@ -202,6 +202,55 @@ def test_set_mc2_tokens_capacity_prefill_mc2_uses_max_num_batched_tokens(monkeyp
     assert afc.get_mc2_tokens_capacity() == 520
 
 
+@pytest.mark.parametrize("recompute_enabled", [False, True])
+@pytest.mark.parametrize(
+    "token_budget,capture_size,tp_size,pcp_size,expected_capacity",
+    [
+        (384, 384, 1, 1, 384),
+        (1024, 384, 1, 1, 1024),
+        (2048, 384, 1, 1, 2048),
+        (1024, 0, 1, 1, 1024),
+        (1025, 384, 8, 1, 1032),
+        (2048, 384, 1, 2, 1344),
+        (32768, 384, 1, 1, 16384),
+    ],
+)
+def test_megamoe_decode_capacity_covers_memory_profile(
+    monkeypatch, recompute_enabled, token_budget, capture_size, tp_size, pcp_size, expected_capacity
+):
+    # With 64 requests and five speculative tokens, decode graphs stop at 384
+    # tokens, but the initial memory profile still uses the scheduler budget.
+    monkeypatch.setattr(afc, "use_cann_megamoe", lambda _: True)
+    monkeypatch.setattr(
+        afc,
+        "get_ascend_config",
+        lambda: SimpleNamespace(
+            enable_prefill_mc2=False,
+            enable_fused_mc2=1,
+            scheduler_config=SimpleNamespace(recompute_scheduler_enable=recompute_enabled),
+        ),
+    )
+    vllm_config = _make_vllm_config(
+        tensor_parallel_size=tp_size,
+        max_num_batched_tokens=token_budget,
+        cudagraph_capture_sizes=[capture_size] if capture_size else [],
+        max_cudagraph_capture_size=capture_size,
+        kv_connector="MooncakeConnectorV2",
+        kv_role="kv_consumer",
+    )
+    vllm_config.parallel_config.prefill_context_parallel_size = pcp_size
+    vllm_config.speculative_config = SimpleNamespace(num_speculative_tokens=5)
+    vllm_config.compilation_config.cudagraph_mode = (
+        CUDAGraphMode.FULL_DECODE_ONLY if capture_size else CUDAGraphMode.NONE
+    )
+
+    afc.set_mc2_tokens_capacity(vllm_config, max_num_reqs=64, uniform_decode_query_len=6)
+
+    assert afc.get_mc2_tokens_capacity() == expected_capacity
+    assert vllm_config.compilation_config.max_cudagraph_capture_size == capture_size
+    assert vllm_config.compilation_config.cudagraph_capture_sizes == ([capture_size] if capture_size else [])
+
+
 @pytest.mark.parametrize(
     "prefill_tokens,decode_sizes,query_lens,token_cap,tp_size,expected",
     [
@@ -746,13 +795,9 @@ def test_prefill_mc2_capacity_reuses_profile_budget(
 
 @pytest.mark.parametrize("pcp", [1, 8])
 @pytest.mark.parametrize("graph", [False, True])
-@pytest.mark.parametrize("mega_moe", [False, True])
-def test_decode_mc2_capacity_keeps_local_graph_and_request_budget(monkeypatch, pcp, graph, mega_moe):
-    monkeypatch.setattr(
-        afc, "get_ascend_config", lambda: SimpleNamespace(enable_prefill_mc2=False, enable_fused_mc2=int(mega_moe))
-    )
-    monkeypatch.setattr(afc, "use_cann_megamoe", lambda _: mega_moe)
-    monkeypatch.setattr(afc, "_is_decode_only_node", lambda _: True)
+def test_decode_mc2_capacity_keeps_local_graph_and_request_budget(monkeypatch, pcp, graph):
+    monkeypatch.setattr(afc, "get_ascend_config", lambda: SimpleNamespace(enable_prefill_mc2=False, enable_fused_mc2=0))
+    monkeypatch.setattr(afc, "use_cann_megamoe", lambda _: False)
     config = _make_vllm_config(
         tensor_parallel_size=8,
         max_num_batched_tokens=16384,
